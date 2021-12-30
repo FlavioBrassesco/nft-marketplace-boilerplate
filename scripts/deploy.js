@@ -1,12 +1,19 @@
 const hre = require("hardhat");
 
 async function main() {
-  const GameItem = await hre.ethers.getContractFactory("GameItem");
-  const gameitem = await GameItem.deploy("MetaTxGameItem", "MTG");
+  const NFTMinter = await hre.ethers.getContractFactory("NFTMinter");
+  const nftminter = await NFTMinter.deploy("NFT Project Name", "NFTPN");
 
-  await gameitem.deployed();
+  await nftminter.deployed();
 
-  console.log("Greeter deployed to:", gameitem.address);
+  console.log("NFT Minter deployed to:", nftminter.address);
+
+  const NFTMarket = await hre.ethers.getContractFactory("NFTMarketplace");
+  const nftmarket = await NFTMarket.deploy();
+
+  await nftmarket.deployed();
+
+  console.log("NFTMarketplace deployed to:", nftmarket.address);
 }
 
 main()
