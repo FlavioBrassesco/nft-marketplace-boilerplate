@@ -8,7 +8,14 @@
     "lint": "next lint",
     "prepare": "husky install",
     "solhint": "solhint -f table contracts/**/*.sol",
-    "prettier:solidity": "prettier --write contracts/**/*.sol"
+    "prettier:solidity": "prettier --write contracts/**/*.sol",
+    "hardhat:compile": "hardhat compile",
+    "hardhat:mumbai": "hardhat run --network mumbai scripts/deploy.js",
+    "hardhat:matic": "hardhat run --network matic scripts/deploy.js",
+    "hardhat:bsctestnet": "hardhat run --network bsctestnet scripts/deploy.js",
+    "hardhat:bsc": "hardhat run --network bsc scripts/deploy.js",
+    "mint:mumbai": "hardhat run --network mumbai scripts/mint.js",
+    "hardhat:verify": "hardhat verify --network mumbai process.env.VERIFY"
   },
   "dependencies": {
     "@nomiclabs/hardhat-ethers": "^2.0.3",
