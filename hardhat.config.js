@@ -2,15 +2,23 @@ require("@nomiclabs/hardhat-waffle");
 require("dotenv").config();
 require("@nomiclabs/hardhat-etherscan");
 
-const privateKey = process.env.MNEMONIC;
+const privateKey = process.env.PRIVATE_KEY;
 const maticUrl = process.env.MATIC_APP_ID;
 const polyScan = process.env.POLYGONSCAN;
+const from = process.env.OWNER_ADDRESS;
+
 module.exports = {
   solidity: "^0.8.0",
   networks: {
     matic: {
       chainId: 137,
       url: `https://rpc-mainnet.maticvigil.com/v1/${maticUrl}`,
+      accounts: [privateKey],
+    },
+    mumbai: {
+      from: from,
+      chainId: 80001,
+      url: `https://rpc-mumbai.maticvigil.com/v1/${maticUrl}`,
       accounts: [privateKey],
     },
   },
