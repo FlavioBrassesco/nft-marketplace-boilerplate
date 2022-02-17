@@ -2,7 +2,10 @@
   "extends": "solhint:recommended",
   "plugins": ["prettier"],
   "rules": {
-    "prettier/prettier": "error",
+    "prettier/prettier": "warning",
+    "max-line-length": "off",
+    "no-inline-assembly": "off",
+    "avoid-low-level-calls": "off",
     "avoid-throw": false,
     "avoid-suicide": "error",
     "avoid-sha3": "warn",
