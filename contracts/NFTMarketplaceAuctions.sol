@@ -379,6 +379,7 @@ contract NFTMarketplaceAuctions is NFTMarketplace {
     {
         uint256 pendingFunds = addressToPendingWithdrawal[payable(msg.sender)];
         addressToPendingWithdrawal[payable(msg.sender)] = 0;
+        _pendingWithdrawals -= pendingFunds;
         (bool success, ) = payable(msg.sender).call{value: pendingFunds}("");
         require(success, "Transfer failed.");
     }
@@ -530,7 +531,7 @@ contract NFTMarketplaceAuctions is NFTMarketplace {
      **/
     function getSalesFees() public override onlyOwner {
         uint256 pendingFunds = address(this).balance - _pendingWithdrawals;
-        require(pendingFunds > 0, "Not pending funds to retrieve");
+        require(pendingFunds > 0, "No pending funds to retrieve");
         (bool success, ) = payable(owner()).call{value: pendingFunds}("");
         require(success, "Transfer failed.");
     }

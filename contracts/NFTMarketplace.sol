@@ -355,11 +355,9 @@ contract NFTMarketplace is ReentrancyGuard, Ownable {
         );
 
         //remove mapping of nft hash
-        bytes32 hash = keccak256(
-            abi.encodePacked(
-                idToMarketItem[_itemId].nftContract,
-                idToMarketItem[_itemId].tokenId
-            )
+        bytes32 hash = makeHash(
+            idToMarketItem[_itemId].nftContract,
+            idToMarketItem[_itemId].tokenId
         );
         delete nftHashToItemId[hash];
 
