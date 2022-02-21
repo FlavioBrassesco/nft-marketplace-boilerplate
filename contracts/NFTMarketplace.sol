@@ -65,8 +65,15 @@ contract NFTMarketplace is ReentrancyGuard, Ownable {
     mapping(address => uint256) internal nftContractToFloorPrice;
     //map user address to listed items quantity
     mapping(address => Counters.Counter) internal ownerToListedItems;
+
+    enum HashStatus {
+        NONE,
+        MARKET,
+        AUCTION
+    }
     //map keccak256 of address and tokenId to itemId
-    mapping(bytes32 => uint256) internal nftHashToItemId;
+    mapping(bytes32 => HashStatus) internal nftHashStatus;
+
     //map keccak256 of address and tokenId to bool (blacklist)
     mapping(bytes32 => bool) internal nftHashToMarketItemBlacklist;
 
@@ -81,7 +88,7 @@ contract NFTMarketplace is ReentrancyGuard, Ownable {
 
     modifier onlyNotListed(address _NFTContract, uint256 _tokenId) {
         bytes32 hash = makeHash(_NFTContract, _tokenId);
-        require(nftHashToItemId[hash] == 0);
+        require(nftHashStatus[hash] == HashStatus.NONE);
         _;
     }
 
@@ -313,7 +320,7 @@ contract NFTMarketplace is ReentrancyGuard, Ownable {
         );
         //add nft hash to mapping for quick checking if nft is already listed
         bytes32 hash = saveHash(_NFTContract, _tokenId);
-        nftHashToItemId[hash] = itemId;
+        nftHashStatus[hash] = HashStatus.MARKET;
 
         //NFT transfer from msg.sender to this contract
         IERC721(_NFTContract).transferFrom(msg.sender, address(this), _tokenId);
@@ -359,7 +366,7 @@ contract NFTMarketplace is ReentrancyGuard, Ownable {
             idToMarketItem[_itemId].nftContract,
             idToMarketItem[_itemId].tokenId
         );
-        delete nftHashToItemId[hash];
+        delete nftHashStatus[hash];
 
         delete idToMarketItem[_itemId];
         _listedItems.decrement();
@@ -471,7 +478,7 @@ contract NFTMarketplace is ReentrancyGuard, Ownable {
             idToMarketItem[_itemId].nftContract,
             idToMarketItem[_itemId].tokenId
         );
-        delete nftHashToItemId[hash];
+        delete nftHashStatus[hash];
 
         delete idToMarketItem[_itemId];
 

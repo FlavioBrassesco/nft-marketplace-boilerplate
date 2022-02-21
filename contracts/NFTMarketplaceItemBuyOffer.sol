@@ -169,11 +169,12 @@ contract NFTMarketplaceBuyOffer is NFTMarketplaceAuctions {
     }
 
     //No hay forma de saber si el listing es un auction.
+    //hay que implementar el hash como registro. hashIsAuctionActive mapping(bytes32 => bool)
     function acceptBuyOffer(
         address _NFTContract,
         uint256 _tokenId,
         address _bidder
-    ) public nonReentrant {
+    ) public nonReentrant onlyNotAuction(_NFTContract, _tokenId) {
         bytes32 hash = makeHash(_NFTContract, _tokenId);
         require(
             userToHashToBuyOfferHashesIndex[payable(_bidder)][hash].active ==

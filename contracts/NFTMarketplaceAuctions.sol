@@ -65,8 +65,9 @@ contract NFTMarketplaceAuctions is NFTMarketplace {
         _;
     }
 
-    modifier onlyNotAuction(uint256 _itemId) {
-        require(!idToAuctionItem[_itemId].isAuction);
+    modifier onlyNotAuction(address _NFTContract, uint256 _tokenId) {
+        bytes32 hash = makeHash(_NFTContract, _tokenId);
+        require(nftHashStatus[hash] != HashStatus.AUCTION);
         _;
     }
 
@@ -153,6 +154,10 @@ contract NFTMarketplaceAuctions is NFTMarketplace {
             payable(address(this)),
             true
         );
+        //add nft hash to mapping for quick checking if nft is already listed
+        bytes32 hash = saveHash(_NFTContract, _tokenId);
+        nftHashStatus[hash] = HashStatus.AUCTION;
+
         // I can't figure out why the linter keeps giving me error when using days keyword
         uint256 _seconds = _days * 24 * 60 * 60;
         uint256 endsAt = block.timestamp + _seconds;
@@ -421,7 +426,7 @@ contract NFTMarketplaceAuctions is NFTMarketplace {
                 idToMarketItem[_itemId].nftContract,
                 idToMarketItem[_itemId].tokenId
             );
-            delete nftHashToItemId[hash];
+            delete nftHashStatus[hash];
 
             delete idToMarketItem[_itemId];
             delete idToAuctionItem[_itemId];
@@ -454,7 +459,7 @@ contract NFTMarketplaceAuctions is NFTMarketplace {
                 idToMarketItem[_itemId].nftContract,
                 idToMarketItem[_itemId].tokenId
             );
-            delete nftHashToItemId[hash];
+            delete nftHashStatus[hash];
 
             _listedItems.decrement();
             ownerToListedItems[idToMarketItem[_itemId].seller].decrement();
