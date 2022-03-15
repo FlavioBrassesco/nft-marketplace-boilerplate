@@ -7,6 +7,9 @@
 
 # testing
 /coverage
+contracts/Greeter.sol
+contracts/test.sol
+contracts/testStruct.sol
 
 # next.js
 /.next/
@@ -38,3 +41,6 @@ yarn-error.log*
 cache
 artifacts
 .next
+contracts/NFTMarketplaceSignatures.sol
+contracts/StorageTest.sol
+scripts/testDeploy.js

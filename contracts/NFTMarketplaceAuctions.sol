@@ -3,22 +3,35 @@ pragma solidity ^0.8.0;
 
 import "./NFTMarketplace.sol";
 
-/**
-@dev adds support for Auctions
- */
+/// @title NFT Marketplace's Auction support
+/// @author Flavio Brassesco
+/// @notice Adds support for running Auctions in NFT Marketplace
+/// @dev Users are required to send msg.value when creating a bid. Only max bid gets stored.
+/// Users can't cancel bids, bids can only get cancelled once another higher bid is created.
+/// Users can't cancel an auction and higher bid always gets the NFT.
+/// Cancelled bids get stored in _userToPendingFunds pool.
+/// Users must retrieve their money manually by calling retrievePendingFunds()
 contract NFTMarketplaceAuctions is NFTMarketplace {
     using Counters for Counters.Counter;
 
     struct AuctionItem {
-        uint256 itemId;
         uint256 currentBid;
         uint256 endsAt;
         address payable currentBidder;
-        bool isAuction;
     }
 
+    mapping(uint256 => AuctionItem) internal _nftIDToAuctionItem;
+    mapping(address => uint256) internal _userToPendingFunds;
+    mapping(address => bool) internal _isAuctionableNFTContract;
+
+    uint256 internal _pendingFunds;
+
+    uint256 internal constant MAX_DAYS = 7;
+
+    /// @notice Logs when an NFT is Auctioned
     event AuctionItemCreated(uint256 indexed itemId, uint256 indexed endsAt);
 
+    /// @notice Logs when a bid is created for an Auction
     event AuctionBidCreated(
         uint256 indexed itemId,
         uint256 indexed currentBid,
@@ -26,147 +39,172 @@ contract NFTMarketplaceAuctions is NFTMarketplace {
         uint256 endsAt
     );
 
-    //map itemId to AuctionItem
-    mapping(uint256 => AuctionItem) internal idToAuctionItem;
-    //map user address to pending funds for withdraw
-    mapping(address => uint256) internal addressToPendingWithdrawal;
-    //map nft contract address to bool for auction whitelist. This is only for market-owner sales.
-    mapping(address => bool) internal nftContractToAuctionWhitelist;
-
-    uint256 internal _pendingWithdrawals;
-
     constructor() {
-        _pendingWithdrawals = 0;
+        _pendingFunds = 0;
     }
 
-    modifier onlyCurrentBidder(uint256 _itemId) {
-        require(payable(msg.sender) == idToAuctionItem[_itemId].currentBidder);
+    modifier onlyCurrentBidder(address _NFTContract, uint32 _tokenId) {
+        uint256 nftID = makeNftID(_NFTContract, _tokenId);
+        require(
+            payable(msg.sender) == _nftIDToAuctionItem[nftID].currentBidder,
+            "Sender is not current bidder"
+        );
         _;
     }
 
-    modifier onlyNotCurrentBidder(uint256 _itemId) {
-        require(payable(msg.sender) != idToAuctionItem[_itemId].currentBidder);
+    modifier onlyNotCurrentBidder(address _NFTContract, uint32 _tokenId) {
+        uint256 nftID = makeNftID(_NFTContract, _tokenId);
+        require(
+            payable(msg.sender) != _nftIDToAuctionItem[nftID].currentBidder,
+            "Current bidder can't perform this action"
+        );
         _;
     }
 
-    modifier onlyAfterStart(uint256 _itemId) {
-        require(idToAuctionItem[_itemId].endsAt > 0);
+    modifier onlyAfterStart(address _NFTContract, uint32 _tokenId) {
+        uint256 nftID = makeNftID(_NFTContract, _tokenId);
+        require(
+            _nftIDToAuctionItem[nftID].endsAt > 0,
+            "Auction has not started or it's already finished"
+        );
         _;
     }
 
-    modifier onlyBeforeEnd(uint256 _itemId) {
-        require(block.timestamp < idToAuctionItem[_itemId].endsAt);
+    modifier onlyBeforeEnd(address _NFTContract, uint32 _tokenId) {
+        uint256 nftID = makeNftID(_NFTContract, _tokenId);
+        require(
+            block.timestamp < _nftIDToAuctionItem[nftID].endsAt,
+            "Auction already finished"
+        );
         _;
     }
 
-    modifier onlyAfterEnd(uint256 _itemId) {
-        require(idToAuctionItem[_itemId].endsAt > 0);
-        require(block.timestamp > idToAuctionItem[_itemId].endsAt);
+    modifier onlyAfterEnd(address _NFTContract, uint32 _tokenId) {
+        uint256 nftID = makeNftID(_NFTContract, _tokenId);
+        require(_nftIDToAuctionItem[nftID].endsAt > 0);
+        require(
+            block.timestamp > _nftIDToAuctionItem[nftID].endsAt,
+            "Auction must be finished to perform this action"
+        );
         _;
     }
 
-    modifier onlyNotAuction(address _NFTContract, uint256 _tokenId) {
-        bytes32 hash = makeHash(_NFTContract, _tokenId);
-        require(nftHashStatus[hash] != HashStatus.AUCTION);
+    modifier onlyNotAuction(address _NFTContract, uint32 _tokenId) {
+        uint256 nftID = makeNftID(_NFTContract, _tokenId);
+        require(
+            unpackMarketItemStatus(_nftIDToMarketItem[nftID].packedData) !=
+                Status.AUCTION,
+            "Auction item is not allowed"
+        );
         _;
     }
 
-    modifier onlyAuction(uint256 _itemId) {
-        require(idToAuctionItem[_itemId].isAuction);
+    modifier onlyAuction(address _NFTContract, uint32 _tokenId) {
+        uint256 nftID = makeNftID(_NFTContract, _tokenId);
+        require(
+            unpackMarketItemStatus(_nftIDToMarketItem[nftID].packedData) ==
+                Status.AUCTION,
+            "Item is not for Auction"
+        );
         _;
     }
 
     modifier onlySenderWithPendingFunds() {
-        //avoid running this function without pending funds.
-        require(addressToPendingWithdrawal[payable(msg.sender)] > 0);
+        require(
+            _userToPendingFunds[payable(msg.sender)] > 0,
+            "User has not pending funds"
+        );
         _;
     }
 
     modifier onlyAuctionWhitelistedContract(address _NFTContract) {
-        require(nftContractToAuctionWhitelist[_NFTContract]);
+        require(
+            _isAuctionableNFTContract[_NFTContract],
+            "Contract is not auctionable"
+        );
         _;
     }
 
     modifier onlyNotAuctionWhitelistedContract(address _NFTContract) {
-        require(!nftContractToAuctionWhitelist[_NFTContract]);
+        require(
+            !_isAuctionableNFTContract[_NFTContract],
+            "Contract must not be auctionable"
+        );
         _;
     }
 
+    /// @notice Adds a contract address to the Auction whitelist
     function addContractToAuctionWhitelist(address _NFTContract)
         public
         onlyOwner
         onlyWhitelistedContract(_NFTContract)
     {
         require(_NFTContract != address(0), "Can't add address(0)");
-        nftContractToAuctionWhitelist[_NFTContract] = true;
+        _isAuctionableNFTContract[_NFTContract] = true;
     }
 
+    /// @notice Removes a contract address from the Auction whitelist
     function removeContractFromAuctionWhitelist(address _NFTContract)
         public
         onlyOwner
     {
         require(_NFTContract != address(0), "Can't remove address(0)");
-        delete nftContractToAuctionWhitelist[_NFTContract];
+        delete _isAuctionableNFTContract[_NFTContract];
     }
 
+    /// @dev Overrided function removes contract address from Auction whitelist and general Whitelist
     function removeWhitelistedNFTContract(address _contractAddress)
         public
         override
         onlyOwner
     {
         super.removeWhitelistedNFTContract(_contractAddress);
-        delete nftContractToAuctionWhitelist[_contractAddress];
+        delete _isAuctionableNFTContract[_contractAddress];
     }
 
-    /**
-  @dev public function to run an Auction for an NFT.
-   Set to payable and require a value if you want to charge a commission for listing.
-   @param _NFTContract address of the NFT Contract for the item
-   @param _tokenId Id of the NFT Token
-   @param _floorPrice Floor Price in wei for the new item
-   @param _days how many days should the auction run
-   @return id of the newly created market item
-  */
+    /// @notice Starts an Auction for a given NFT
+    /// @param _floorPrice Floor price in wei
+    /// @param _days Duration in days. 1 to MAX_DAYS inclusive
     function createMarketAuction(
         address _NFTContract,
-        uint256 _tokenId,
+        uint32 _tokenId,
         uint256 _floorPrice,
         uint256 _days
     )
         public
         nonReentrant
-        onlyWhitelistedContract(_NFTContract)
+        onlyAuctionWhitelistedContract(_NFTContract)
         onlyNotListed(_NFTContract, _tokenId)
         returns (uint256)
     {
         require(_floorPrice > 0, "Floor price must be at least 1 wei");
-        require(_days > 0);
+        require(_days >= 1 && _days <= MAX_DAYS, "Duration out of bounds");
 
-        _itemIds.increment();
-        uint256 itemId = _itemIds.current();
+        _itemIDs.increment();
+        uint256 itemId = uint32(_itemIDs.current());
 
-        idToMarketItem[itemId] = MarketItem(
-            itemId,
-            _tokenId,
+        uint256 nftID = makeNftID(_NFTContract, _tokenId);
+
+        uint256 packedData = 0;
+        packedData |= uint160(_NFTContract);
+        packedData |= uint256(_tokenId) << 160;
+        packedData |= uint256(itemId) << 192;
+        packedData |= uint256(Status.AUCTION) << 224;
+
+        _nftIDToMarketItem[nftID] = MarketItem(
+            packedData,
             _floorPrice,
-            _NFTContract,
-            payable(msg.sender),
-            payable(address(this)),
-            true
+            payable(msg.sender)
         );
-        //add nft hash to mapping for quick checking if nft is already listed
-        bytes32 hash = saveHash(_NFTContract, _tokenId);
-        nftHashStatus[hash] = HashStatus.AUCTION;
 
         // I can't figure out why the linter keeps giving me error when using days keyword
         uint256 _seconds = _days * 24 * 60 * 60;
         uint256 endsAt = block.timestamp + _seconds;
-        idToAuctionItem[itemId] = AuctionItem(
-            itemId,
+
+        _nftIDToAuctionItem[nftID] = AuctionItem(
             0,
             endsAt,
-            payable(address(0)),
-            true
+            payable(address(0))
         );
 
         emit MarketItemCreated(
@@ -182,39 +220,17 @@ contract NFTMarketplaceAuctions is NFTMarketplace {
         //NFT transfer from msg.sender to this contract
         IERC721(_NFTContract).transferFrom(msg.sender, address(this), _tokenId);
 
-        _listedItems.increment();
-        ownerToListedItems[payable(msg.sender)].increment();
+        _activeItemsCount.increment();
+        _sellerToListedItemsCount[payable(msg.sender)].increment();
 
         return itemId;
     }
 
-    /**
-  @dev function override to avoid creating a common sale on a meant to be auctioned item.
-   */
-    function createMarketOwnerSale(address _NFTContract, uint256 _tokenId)
-        public
-        payable
-        override
-        nonReentrant
-        onlyNotListed(_NFTContract, _tokenId)
-        onlyNotBlockedItem(_NFTContract, _tokenId)
-        onlyNotAuctionWhitelistedContract(_NFTContract)
-    {
-        super.createMarketOwnerSale(_NFTContract, _tokenId);
-    }
-
-    /**
-  @dev public payable function to start an auction on a non-listed-in-blockchain item. 
-  This is useful when the owner of the marketplace wants to allow an entire collection
-  to be ran as an auction, saving the gas cost (and especially time) for listing all items.
-  To avoid users to buy non listed in marketplace items a blacklist is implemented to block those items.
-  Owner of the marketplace must be the owner of NFT Contract of the item.
-  **/
-    function createMarketOwnerAuction(
-        address _NFTContract,
-        uint256 _tokenId,
-        uint256 _days
-    )
+    /// @notice Start an auction and create a bid for a whitelisted NFT belonging to owner()
+    /// @dev This allows the marketplace owner to list a batch of NFTs as sellable by Auction.
+    /// Should be clarified to users that when placing a bid the auction will start with MAX_DAYS of duration.
+    /// ! A bot could easily buy an NFT that is meant to be auctioned simply by calling createMarketOwnerSale().
+    function createMarketOwnerAuction(address _NFTContract, uint32 _tokenId)
         public
         payable
         nonReentrant
@@ -223,33 +239,40 @@ contract NFTMarketplaceAuctions is NFTMarketplace {
         onlyAuctionWhitelistedContract(_NFTContract)
         returns (uint256)
     {
-        uint256 floorPrice = nftContractToFloorPrice[_NFTContract];
-        require(floorPrice > 0);
-        require(msg.value >= floorPrice);
-        require(_days > 0);
+        uint256 floorPrice = _NFTContractToFloorPrice[_NFTContract];
+        require(floorPrice > 0, "Floor price must be greater than 0");
+        require(
+            msg.value >= floorPrice,
+            "Value sent must be greater than floor price"
+        );
 
-        _itemIds.increment();
-        uint256 itemId = _itemIds.current();
+        uint256 _days = MAX_DAYS;
 
-        idToMarketItem[itemId] = MarketItem(
-            itemId,
-            _tokenId,
+        _itemIDs.increment();
+        uint256 itemId = uint32(_itemIDs.current());
+
+        uint256 nftID = makeNftID(_NFTContract, _tokenId);
+
+        uint256 packedData = uint256(0);
+        packedData |= uint160(_NFTContract);
+        packedData |= uint256(_tokenId) << 160;
+        packedData |= uint256(itemId) << 192;
+        packedData |= uint256(Status.AUCTION) << 224;
+
+        _nftIDToMarketItem[nftID] = MarketItem(
+            packedData,
             floorPrice,
-            _NFTContract,
-            payable(address(this)),
-            payable(address(0)),
-            true
+            payable(owner())
         );
 
         // I can't figure out why the linter keeps giving me error when using days keyword
         uint256 _seconds = _days * 24 * 60 * 60;
         uint256 endsAt = block.timestamp + _seconds;
-        idToAuctionItem[itemId] = AuctionItem(
-            itemId,
+
+        _nftIDToAuctionItem[nftID] = AuctionItem(
             msg.value,
             endsAt,
-            payable(msg.sender),
-            true
+            payable(msg.sender)
         );
 
         emit MarketItemCreated(
@@ -257,285 +280,292 @@ contract NFTMarketplaceAuctions is NFTMarketplace {
             _tokenId,
             floorPrice,
             _NFTContract,
-            payable(address(this))
+            owner()
         );
 
         emit AuctionItemCreated(itemId, endsAt);
         emit AuctionBidCreated(itemId, msg.value, payable(msg.sender), endsAt);
 
-        //NFT transfer from msg.sender to this contract
+        //NFT owner must be the same as this contract
         IERC721(_NFTContract).transferFrom(owner(), address(this), _tokenId);
 
-        _listedItems.increment();
+        _activeItemsCount.increment();
+        _pendingFunds += msg.value;
 
         return itemId;
     }
 
-    /**
-    @dev public payable function to bid for an auction. 
-    Front end is responsible from choosing to use this function instead of sumToPreviousBid when necessary
-    @param _itemId Id of the AuctionItem
-   */
-    function createAuctionBid(uint256 _itemId)
+    /// @notice Creates a bid for a given NFT
+    /// @dev Only highest bid is saved for a given NFT Auction.
+    function createAuctionBid(address _NFTContract, uint32 _tokenId)
         public
         payable
         nonReentrant
-        onlyNotSeller(_itemId)
-        onlyAfterStart(_itemId)
-        onlyBeforeEnd(_itemId)
-        onlyNotCurrentBidder(_itemId)
+        onlyNotSeller(_NFTContract, _tokenId)
+        onlyAfterStart(_NFTContract, _tokenId)
+        onlyBeforeEnd(_NFTContract, _tokenId)
+        onlyNotCurrentBidder(_NFTContract, _tokenId)
     {
+        uint256 nftID = makeNftID(_NFTContract, _tokenId);
+
         require(
-            msg.value > idToMarketItem[_itemId].price &&
-                msg.value > idToAuctionItem[_itemId].currentBid,
+            msg.value > _nftIDToMarketItem[nftID].price &&
+                msg.value > _nftIDToAuctionItem[nftID].currentBid,
             "Your bid must be higher than last bid"
         );
+
         //if it is not the first bid
-        if (idToAuctionItem[_itemId].currentBidder != address(0)) {
-            address payable previousBidder = idToAuctionItem[_itemId]
+        if (_nftIDToAuctionItem[nftID].currentBidder != address(0)) {
+            address payable previousBidder = _nftIDToAuctionItem[nftID]
                 .currentBidder;
-            uint256 previousBid = idToAuctionItem[_itemId].currentBid;
+            uint256 previousBid = _nftIDToAuctionItem[nftID].currentBid;
             //update pending funds for previousBidder
-            addressToPendingWithdrawal[previousBidder] += previousBid;
+            _userToPendingFunds[previousBidder] += previousBid;
         }
 
         //update general pending funds with this new bid
-        _pendingWithdrawals += msg.value;
+        _pendingFunds += msg.value;
 
-        idToAuctionItem[_itemId].currentBid = msg.value;
-        idToAuctionItem[_itemId].currentBidder = payable(msg.sender);
+        _nftIDToAuctionItem[nftID].currentBid = msg.value;
+        _nftIDToAuctionItem[nftID].currentBidder = payable(msg.sender);
         //if remaining days for auction to end are < 1, then reset endsAt to now + 1 day;
-        uint256 remainingSeconds = (idToAuctionItem[_itemId].endsAt -
+        uint256 remainingSeconds = (_nftIDToAuctionItem[nftID].endsAt -
             block.timestamp);
         if (remainingSeconds < 86400) {
-            idToAuctionItem[_itemId].endsAt = block.timestamp + 1 days;
+            _nftIDToAuctionItem[nftID].endsAt = block.timestamp + 1 days;
         }
 
         emit AuctionBidCreated(
-            _itemId,
-            idToAuctionItem[_itemId].currentBid,
-            idToAuctionItem[_itemId].currentBidder,
-            idToAuctionItem[_itemId].endsAt
+            unpackMarketItemItemId(_nftIDToMarketItem[nftID].packedData),
+            _nftIDToAuctionItem[nftID].currentBid,
+            _nftIDToAuctionItem[nftID].currentBidder,
+            _nftIDToAuctionItem[nftID].endsAt
         );
     }
 
-    /**
-  @dev public payable function to add to a previous bid. 
-  Front end is responsible from choosing to use this function instead of createAuctionBid when necessary
-  @param _itemId Id of the AuctionItem
-  @param _askingPrice new bid. It is asked since pending funds will be used along msg.value
-  */
-    function sumToPreviousBid(uint256 _itemId, uint256 _askingPrice)
+    /// @notice creates a bid for a given NFT using user's pending funds.
+    /// @param _askingPrice intended new bid. Should be <= user's pending funds + msg.value
+    function sumToPreviousBid(
+        address _NFTContract,
+        uint32 _tokenId,
+        uint256 _askingPrice
+    )
         public
         payable
         nonReentrant
-        onlyNotSeller(_itemId)
-        onlyAfterStart(_itemId)
-        onlyBeforeEnd(_itemId)
-        onlyNotCurrentBidder(_itemId)
+        onlyNotSeller(_NFTContract, _tokenId)
+        onlyAfterStart(_NFTContract, _tokenId)
+        onlyBeforeEnd(_NFTContract, _tokenId)
+        onlyNotCurrentBidder(_NFTContract, _tokenId)
         onlySenderWithPendingFunds
     {
+        uint256 nftID = makeNftID(_NFTContract, _tokenId);
         //if what address sends along with his pending funds is enough
         require(
-            (addressToPendingWithdrawal[payable(msg.sender)] + msg.value) >=
-                _askingPrice
+            (_userToPendingFunds[payable(msg.sender)] + msg.value) >=
+                _askingPrice,
+            "Not enough funds to cover current bid"
         );
-        require(_askingPrice > idToAuctionItem[_itemId].currentBid);
-        //Some more security just to be extra cautious
-        require(msg.value < _askingPrice);
+        require(
+            _askingPrice > _nftIDToAuctionItem[nftID].currentBid,
+            "Asking price must be bigger than current bid"
+        );
+        require(
+            msg.value < _askingPrice,
+            "Value sent must be lower than Asking Price"
+        );
 
-        //calculate how much from pending funds is part of this new bid
+        //calculate how much from user pending funds is part of this new bid
         uint256 substractFromPending = _askingPrice - msg.value;
-        //substract that amount from pending funds for user
-        addressToPendingWithdrawal[payable(msg.sender)] -= substractFromPending;
+        //substract that amount from user pending funds
+        _userToPendingFunds[payable(msg.sender)] -= substractFromPending;
+
         //add msg.value to general pending funds
-        _pendingWithdrawals += msg.value;
+        _pendingFunds += msg.value;
 
-        address payable previousBidder = idToAuctionItem[_itemId].currentBidder;
-        uint256 previousBid = idToAuctionItem[_itemId].currentBid;
         //update pending funds for previousBidder
-        addressToPendingWithdrawal[previousBidder] += previousBid;
+        address payable previousBidder = _nftIDToAuctionItem[nftID]
+            .currentBidder;
+        uint256 previousBid = _nftIDToAuctionItem[nftID].currentBid;
+        _userToPendingFunds[previousBidder] += previousBid;
 
-        idToAuctionItem[_itemId].currentBid = _askingPrice;
-        idToAuctionItem[_itemId].currentBidder = payable(msg.sender);
+        _nftIDToAuctionItem[nftID].currentBid = _askingPrice;
+        _nftIDToAuctionItem[nftID].currentBidder = payable(msg.sender);
+
         //if remaining days for auction to end are < 1, then reset endsAt to now + 1 day;
-        uint256 remainingSeconds = (idToAuctionItem[_itemId].endsAt -
+        uint256 remainingSeconds = (_nftIDToAuctionItem[nftID].endsAt -
             block.timestamp);
         if (remainingSeconds < 86400) {
-            idToAuctionItem[_itemId].endsAt = block.timestamp + 1 days;
+            _nftIDToAuctionItem[nftID].endsAt = block.timestamp + 1 days;
         }
 
         emit AuctionBidCreated(
-            _itemId,
-            idToAuctionItem[_itemId].currentBid,
-            idToAuctionItem[_itemId].currentBidder,
-            idToAuctionItem[_itemId].endsAt
+            unpackMarketItemItemId(_nftIDToMarketItem[nftID].packedData),
+            _nftIDToAuctionItem[nftID].currentBid,
+            _nftIDToAuctionItem[nftID].currentBidder,
+            _nftIDToAuctionItem[nftID].endsAt
         );
     }
 
-    /**
-  @dev public function to allow not winning users to retrieve their funds
-   */
+    /// @notice Transfer user's pending funds to user
     function retrievePendingFunds()
         public
         nonReentrant
         onlyNotOwner
         onlySenderWithPendingFunds
     {
-        uint256 pendingFunds = addressToPendingWithdrawal[payable(msg.sender)];
-        addressToPendingWithdrawal[payable(msg.sender)] = 0;
-        _pendingWithdrawals -= pendingFunds;
-        (bool success, ) = payable(msg.sender).call{value: pendingFunds}("");
+        uint256 userPendingFunds = _userToPendingFunds[payable(msg.sender)];
+        _userToPendingFunds[payable(msg.sender)] = 0;
+        _pendingFunds -= userPendingFunds;
+        (bool success, ) = payable(msg.sender).call{value: userPendingFunds}(
+            ""
+        );
         require(success, "Transfer failed.");
     }
 
-    /**
-  @dev private function to finish an auction and retrieve funds / transfer NFT
-   */
-    function _finishAuctionSale(uint256 _itemId)
+    ///@dev Finish an auction and retrieve funds / transfer NFT
+    function _finishAuctionSale(address _NFTContract, uint32 _tokenId)
         private
-        onlyAfterEnd(_itemId)
-        onlyAuction(_itemId)
+        onlyAfterEnd(_NFTContract, _tokenId)
+        onlyAuction(_NFTContract, _tokenId)
     {
+        uint256 nftID = makeNftID(_NFTContract, _tokenId);
+        address contractAddress = unpackMarketItemContract(
+            _nftIDToMarketItem[nftID].packedData
+        );
+        uint256 tokenId = unpackMarketItemTokenId(
+            _nftIDToMarketItem[nftID].packedData
+        );
+        uint256 itemId = unpackMarketItemItemId(
+            _nftIDToMarketItem[nftID].packedData
+        );
         //if there is an offer after auction ended
         if (
-            idToAuctionItem[_itemId].currentBidder != address(0) &&
-            idToAuctionItem[_itemId].currentBid != 0
+            _nftIDToAuctionItem[nftID].currentBidder != address(0) &&
+            _nftIDToAuctionItem[nftID].currentBid != 0
         ) {
-            address newOwner = idToAuctionItem[_itemId].currentBidder;
-            address seller = idToMarketItem[_itemId].seller;
-            uint256 payment = idToAuctionItem[_itemId].currentBid;
+            address newOwner = _nftIDToAuctionItem[nftID].currentBidder;
+            address seller = _nftIDToMarketItem[nftID].seller;
+            uint256 payment = _nftIDToAuctionItem[nftID].currentBid;
+
             //NFT transfer
-            IERC721(idToMarketItem[_itemId].nftContract).transferFrom(
+            IERC721(contractAddress).transferFrom(
                 address(this),
                 newOwner,
-                idToMarketItem[_itemId].tokenId
+                tokenId
             );
 
             emit MarketItemSold(
-                _itemId,
-                idToMarketItem[_itemId].tokenId,
-                idToAuctionItem[_itemId].currentBid,
-                idToMarketItem[_itemId].nftContract,
-                idToMarketItem[_itemId].seller,
-                idToAuctionItem[_itemId].currentBidder
+                itemId,
+                tokenId,
+                _nftIDToAuctionItem[nftID].currentBid,
+                contractAddress,
+                _nftIDToMarketItem[nftID].seller,
+                _nftIDToAuctionItem[nftID].currentBidder
             );
 
-            //remove mapping of nft hash
-            bytes32 hash = makeHash(
-                idToMarketItem[_itemId].nftContract,
-                idToMarketItem[_itemId].tokenId
-            );
-            delete nftHashStatus[hash];
+            delete _nftIDToMarketItem[nftID];
+            delete _nftIDToAuctionItem[nftID];
 
-            delete idToMarketItem[_itemId];
-            delete idToAuctionItem[_itemId];
+            _activeItemsCount.decrement();
+            _sellerToListedItemsCount[seller].decrement();
 
-            _itemsSold.increment();
-            _listedItems.decrement();
-            ownerToListedItems[seller].decrement();
+            _pendingFunds -= payment;
 
-            _pendingWithdrawals -= payment;
-            (bool success, ) = seller.call{value: payment}("");
+            // Payment & fee calculation
+            uint256 fee = payment * (getFee(_NFTContract) / 10000);
+            uint256 paymentToSeller = payment - fee;
+
+            (bool success, ) = seller.call{value: paymentToSeller}("");
             require(success, "Transfer failed.");
         } else {
             //is not sold so we return the NFT.
 
-            IERC721(idToMarketItem[_itemId].nftContract).transferFrom(
+            IERC721(contractAddress).transferFrom(
                 address(this),
-                idToMarketItem[_itemId].seller,
-                idToMarketItem[_itemId].tokenId
+                _nftIDToMarketItem[nftID].seller,
+                tokenId
             );
             emit MarketItemCancelled(
-                _itemId,
-                idToMarketItem[_itemId].tokenId,
-                idToMarketItem[_itemId].price,
-                idToMarketItem[_itemId].nftContract,
-                idToMarketItem[_itemId].seller
+                itemId,
+                tokenId,
+                _nftIDToMarketItem[nftID].price,
+                contractAddress,
+                _nftIDToMarketItem[nftID].seller
             );
 
-            //remove mapping of nft hash
-            bytes32 hash = makeHash(
-                idToMarketItem[_itemId].nftContract,
-                idToMarketItem[_itemId].tokenId
-            );
-            delete nftHashStatus[hash];
+            _activeItemsCount.decrement();
+            _sellerToListedItemsCount[_nftIDToMarketItem[nftID].seller]
+                .decrement();
 
-            _listedItems.decrement();
-            ownerToListedItems[idToMarketItem[_itemId].seller].decrement();
-
-            delete idToMarketItem[_itemId];
-            delete idToAuctionItem[_itemId];
+            delete _nftIDToMarketItem[nftID];
+            delete _nftIDToAuctionItem[nftID];
         }
     }
 
-    /**
-  @dev public function for sellers to finish an auction and retrieve funds / transfer NFT
-   */
-    function finishAuctionSale(uint256 _itemId)
+    /// @notice Finish an auction and receive payment
+    function finishAuctionSale(address _NFTContract, uint32 _tokenId)
         public
         nonReentrant
-        onlySeller(_itemId)
+        onlySeller(_NFTContract, _tokenId)
     {
-        _finishAuctionSale(_itemId);
+        _finishAuctionSale(_NFTContract, _tokenId);
     }
 
-    /**
-  @dev public function for winning buyers to finish an auction and transfer NFT / pay funds
-   */
-    function retrieveAuctionItem(uint256 _itemId)
+    /// @notice Finish an auction and receive NFT
+    function retrieveAuctionItem(address _NFTContract, uint32 _tokenId)
         public
         nonReentrant
-        onlyCurrentBidder(_itemId)
+        onlyCurrentBidder(_NFTContract, _tokenId)
     {
-        _finishAuctionSale(_itemId);
+        _finishAuctionSale(_NFTContract, _tokenId);
     }
 
-    /**
-  @dev this function should replace fetchItemsForSale if a Marketplace with Auction support is used.
-  **/
+    /// @notice Returns items listed as Auction in the marketplace.
+    /// @dev This is meant to be used for sync purposes only. Webapp should build a cache for all listed items.
+    /// @param _page current page. Beware that for multiple calls this should equal the last returned item's ID + 1
+    /// @param _amount amount of items to fetch
+    function fetchItemsInAuction(uint256 _page, uint256 _amount)
+        public
+        view
+        returns (MarketItem[] memory, AuctionItem[] memory)
+    {
+        MarketItem[] memory items = new MarketItem[](_amount);
+        AuctionItem[] memory aItems = new AuctionItem[](_amount);
+
+        uint256 counter = 0;
+        for (uint256 i = _page; i <= _itemIDs.current(); i++) {
+            uint256 nftID = _itemIDToNftID[i];
+            if (
+                unpackMarketItemStatus(_nftIDToMarketItem[nftID].packedData) ==
+                Status.AUCTION
+            ) {
+                MarketItem storage currentItem = _nftIDToMarketItem[nftID];
+                items[counter] = currentItem;
+                AuctionItem storage currentAItem = _nftIDToAuctionItem[nftID];
+                aItems[counter] = currentAItem;
+                counter++;
+                if (counter == _amount) break;
+            }
+        }
+
+        return (items, aItems);
+    }
+
+    /// @notice Returns all items listed as Auction in the marketplace
+    /// @dev The function with _page and _amount parameters is safer to use since this could eventually reach the block gas limit
     function fetchItemsInAuction()
         public
         view
-        returns (MarketItem[] memory items, AuctionItem[] memory aItems)
+        returns (MarketItem[] memory, AuctionItem[] memory)
     {
-        items = fetchItemsForSale();
-        aItems = new AuctionItem[](items.length);
-        for (uint256 i = 0; i < items.length; i++) {
-            if (idToAuctionItem[items[i].itemId].itemId != 0) {
-                AuctionItem storage currentItem = idToAuctionItem[
-                    items[i].itemId
-                ];
-                aItems[i] = currentItem;
-            }
-        }
+        return fetchItemsInAuction(0, _activeItemsCount.current());
     }
 
-    /**
-  @dev this function should replace fetchMyItemsForSale if Marketplace with Auction support is used
-  **/
-    function fetchMyItemsInAuction()
-        public
-        view
-        returns (MarketItem[] memory items, AuctionItem[] memory aItems)
-    {
-        items = fetchMyItemsForSale();
-        aItems = new AuctionItem[](items.length);
-        for (uint256 i = 0; i < items.length; i++) {
-            if (idToAuctionItem[items[i].itemId].itemId != 0) {
-                AuctionItem storage currentItem = idToAuctionItem[
-                    items[i].itemId
-                ];
-                aItems[i] = currentItem;
-            }
-        }
-    }
-
-    /**
-     * @dev onlyOwner function to retrieve payed secondary sales fees.
-     **/
-    function getSalesFees() public override onlyOwner {
-        uint256 pendingFunds = address(this).balance - _pendingWithdrawals;
+    /// @notice Retrieve payed secondary sales fees.
+    /// @dev This override prevents owner to transfer pending funds in users pools
+    function transferSalesFees() public override onlyOwner {
+        uint256 pendingFunds = address(this).balance - _pendingFunds;
         require(pendingFunds > 0, "No pending funds to retrieve");
         (bool success, ) = payable(owner()).call{value: pendingFunds}("");
         require(success, "Transfer failed.");

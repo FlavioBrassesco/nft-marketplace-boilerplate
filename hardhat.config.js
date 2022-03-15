@@ -11,6 +11,15 @@ const mnemonic = process.env.MNEMONIC;
 module.exports = {
   solidity: "0.8.0",
   networks: {
+    ganache: {
+      from: "0xd94C02d5aeFE85C1878Dc632f5Ee02aaf4341d1c",
+      chainId: 8001,
+      url: "HTTP://127.0.0.1:7545",
+      accounts: {
+        mnemonic:
+          "excite field online wine obtain vital elegant main text awkward age slide",
+      },
+    },
     matic: {
       from: from,
       chainId: 137,

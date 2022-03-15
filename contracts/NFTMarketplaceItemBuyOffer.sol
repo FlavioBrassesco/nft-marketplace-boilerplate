@@ -2,128 +2,93 @@
 pragma solidity ^0.8.0;
 
 import "./NFTMarketplaceAuctions.sol";
+import "./ActiveIndexes.sol";
 
-/**
-@dev adds support for unsolicited buy offer
-Users can post an offer anytime and cancel anytime
-Owners can accept an offer anytime
-Offers are stored in a pool and refunded when cancelled.
-
-What happens when someone wants to put an item for sale or auction when it has offers?
-offers should dissappear from front end in case of auction.
-Only bidder should be able to cancel an offer. Offers don't limit the owner in any case.
-Offers persist (eth persist in contract) as long as the bidder doesn't cancel the offer.
-
-Not possible to place buy offer for auction items
-acceptBuyOffer should have modifier onlyNotAuction onlyOwner
-
- */
+/// @title NFT Marketplace's Buy Offer Support
+/// @author Flavio Brassesco
+/// @notice Adds support for unsolicited Buy offers in NFT Marketplace
+/// @dev NFTMarketplaceAuctions is required.
+/// Users can post an offer anytime and cancel anytime.
+/// Owners can accept an offer anytime (Except if they are running an auction).
+/// Offers are stored in a pool and refunded when cancelled.
+/// Only bidder is enabled to cancel an offer. Offers don't limit the owner in any case.
+/// Buy offers should dissappear from front end in case the owner inits an auction.
+/// Is not possible to place a Buy offer for auction items.
 contract NFTMarketplaceBuyOffer is NFTMarketplaceAuctions {
-    using Counters for Counters.Counter;
+    using ActiveIndexes for ActiveIndexes.ActiveIndex;
 
-    //item could be listed or not, so we need to store offer associated with nft hash
-    //bytes32 hash => uint256[] offers NFTHashToBuyOffers[]
-    //check if we have any offer (require NFTHashToBuyOffers[hash][0] != 0)
-    //user address to offer in nft, so we need to reference nft hash and index in bids array
-    //address => (bytes32 hash => uint256 index) userNFTBuyOfferIndex[address][hash]
-    //we need also a way to get all nft that have offers from a user
-    //address => bytes32[]
-    //the getAllMyBuyOffers function should return hash and index, or a struct with {contractAddress, tokenId} & index (for deletion if required)
+    mapping(uint256 => uint256[]) internal _nftIDToBids;
+    mapping(uint256 => address) internal _indexOf_nftIDToBids_user;
 
-    mapping(bytes32 => uint256[]) internal NFTHashToBuyOffers;
-    mapping(address => mapping(bytes32 => IndexBoolean))
-        internal userToHashToBuyOffersIndex;
-    mapping(address => bytes32[]) internal userToBuyOfferHashes;
-    mapping(address => mapping(bytes32 => IndexBoolean))
-        internal userToHashToBuyOfferHashesIndex;
+    mapping(address => mapping(uint256 => ActiveIndexes.ActiveIndex))
+        internal _user_nftID_IndexOf_nftIDToBids;
+    mapping(address => uint256[]) internal _userToNftIDsWithBids;
+    mapping(address => mapping(uint256 => ActiveIndexes.ActiveIndex))
+        internal _user_nftID_IndexOf_userToNftIDsWithBids;
 
-    struct IndexBoolean {
-        uint256 index;
-        bool active;
-    }
-
+    /// Only for viewing purposes
     struct BuyOffer {
-        bytes32 hash;
-        address nftContract;
+        address contractAddress;
         address payable userAddress;
-        uint256 tokenId;
-        uint256 utbohIndex;
+        uint32 tokenId;
         uint256 bid;
-    }
-
-    function getAllMyOffers()
-        public
-        view
-        returns (BuyOffer[] memory buyOffers)
-    {
-        require(userToBuyOfferHashes[msg.sender].length != 0);
-        buyOffers = new BuyOffer[](userToBuyOfferHashes[msg.sender].length);
-        for (uint256 i = 0; i < userToBuyOfferHashes[msg.sender].length; i++) {
-            bytes32 hash = userToBuyOfferHashes[msg.sender][i];
-            uint256 htboIndex = userToHashToBuyOffersIndex[msg.sender][hash]
-                .index;
-            uint256 bid = NFTHashToBuyOffers[hash][htboIndex];
-            NFTPair storage nftPair = nftHashToNFTPair[hash];
-            buyOffers[i] = BuyOffer(
-                hash,
-                nftPair.nftContract,
-                payable(msg.sender),
-                nftPair.tokenId,
-                i,
-                bid
-            );
-        }
     }
 
     event BuyOfferCreated(
         address indexed bidder,
         address indexed nftContract,
-        uint256 indexed tokenId,
+        uint32 indexed tokenId,
         uint256 bid
     );
     event BuyOfferCancelled(
         address indexed bidder,
         address indexed nftContract,
-        uint256 indexed tokenId,
+        uint32 indexed tokenId,
         uint256 bid
     );
     event BuyOfferAccepted(
         address indexed bidder,
         address indexed nftContract,
-        uint256 indexed tokenId,
+        uint32 indexed tokenId,
         uint256 bid
     );
 
-    function createBuyOffer(address _NFTContract, uint256 _tokenId)
+    /// @notice Create a Buy Offer for an NFT
+    /// @param _NFTContract address of the NFT Collection
+    /// @param _tokenId ID of the token
+    /// @dev Users can't create a Buy Offer for listed Items or Auctioned Items.
+    /// msg.value gets stored as the offer. Users can't add to previous offer or make a new offer without cancel old offer first.
+    function createBuyOffer(address _NFTContract, uint32 _tokenId)
         public
         payable
         nonReentrant
         onlyNotListed(_NFTContract, _tokenId)
         onlyNotBlockedItem(_NFTContract, _tokenId)
+        onlyNotAuction(_NFTContract, _tokenId)
     {
         require(msg.value > 0, "Price must be at least 1 wei");
-        bytes32 hash = saveHash(_NFTContract, _tokenId);
+
+        uint256 nftID = makeNftID(_NFTContract, _tokenId);
         require(
-            userToHashToBuyOfferHashesIndex[payable(msg.sender)][hash].active !=
-                true,
+            !_user_nftID_IndexOf_userToNftIDsWithBids[payable(msg.sender)][
+                nftID
+            ].isActive(),
             "Offer for this listing already exists"
         );
 
-        userToHashToBuyOffersIndex[payable(msg.sender)][hash] = IndexBoolean(
-            NFTHashToBuyOffers[hash].length,
-            true
+        _user_nftID_IndexOf_nftIDToBids[payable(msg.sender)][nftID].storeIndex(
+            _nftIDToBids[nftID].length
         );
-        NFTHashToBuyOffers[hash].push(msg.value);
-
-        userToHashToBuyOfferHashesIndex[payable(msg.sender)][
-            hash
-        ] = IndexBoolean(
-            userToBuyOfferHashes[payable(msg.sender)].length,
-            true
+        _indexOf_nftIDToBids_user[_nftIDToBids[nftID].length] = payable(
+            msg.sender
         );
-        userToBuyOfferHashes[payable(msg.sender)].push(hash);
+        _nftIDToBids[nftID].push(msg.value);
 
-        _pendingWithdrawals += msg.value;
+        _user_nftID_IndexOf_userToNftIDsWithBids[payable(msg.sender)][nftID]
+            .storeIndex(_userToNftIDsWithBids[payable(msg.sender)].length);
+        _userToNftIDsWithBids[payable(msg.sender)].push(nftID);
+
+        _pendingFunds += msg.value;
 
         emit BuyOfferCreated(
             payable(msg.sender),
@@ -133,27 +98,32 @@ contract NFTMarketplaceBuyOffer is NFTMarketplaceAuctions {
         );
     }
 
-    function cancelBuyOffer(address _NFTContract, uint256 _tokenId)
+    /// @notice Cancels a Buy Offer for the specified NFT
+    /// @param _NFTContract address of the NFT Collection
+    /// @param _tokenId ID of the token
+    /// @dev Money gets into _userPendingFunds pool and should be retrieved by the user.
+    function cancelBuyOffer(address _NFTContract, uint32 _tokenId)
         public
         nonReentrant
     {
-        bytes32 hash = makeHash(_NFTContract, _tokenId);
+        uint256 nftID = makeNftID(_NFTContract, _tokenId);
+
         require(
-            userToHashToBuyOfferHashesIndex[payable(msg.sender)][hash].active ==
-                true,
+            _user_nftID_IndexOf_nftIDToBids[payable(msg.sender)][nftID]
+                .isActive(),
             "No active offer found."
         );
 
-        uint256 htboIndex = userToHashToBuyOffersIndex[payable(msg.sender)][
-            hash
-        ].index;
-        uint256 bid = NFTHashToBuyOffers[hash][htboIndex];
-        uint256 htbohIndex = userToHashToBuyOfferHashesIndex[
+        uint256 boIndex = _user_nftID_IndexOf_nftIDToBids[payable(msg.sender)][
+            nftID
+        ].index();
+        uint256 bid = _nftIDToBids[nftID][boIndex];
+        uint256 uboIndex = _user_nftID_IndexOf_userToNftIDsWithBids[
             payable(msg.sender)
-        ][hash].index;
+        ][nftID].index();
 
         //money gets into user pool. User must call retrievePendingFunds to transfer to his wallet
-        addressToPendingWithdrawal[payable(msg.sender)] += bid;
+        _userToPendingFunds[payable(msg.sender)] += bid;
 
         emit BuyOfferCancelled(
             payable(msg.sender),
@@ -162,42 +132,103 @@ contract NFTMarketplaceBuyOffer is NFTMarketplaceAuctions {
             bid
         );
 
-        delete NFTHashToBuyOffers[hash][htboIndex];
-        delete userToBuyOfferHashes[payable(msg.sender)][htbohIndex];
-        delete userToHashToBuyOffersIndex[payable(msg.sender)][hash];
-        delete userToHashToBuyOfferHashesIndex[payable(msg.sender)][hash];
+        delete _nftIDToBids[nftID][boIndex];
+        delete _indexOf_nftIDToBids_user[boIndex];
+        delete _userToNftIDsWithBids[payable(msg.sender)][uboIndex];
+
+        delete _user_nftID_IndexOf_nftIDToBids[payable(msg.sender)][nftID];
+        delete _user_nftID_IndexOf_userToNftIDsWithBids[payable(msg.sender)][
+            nftID
+        ];
     }
 
-    //No hay forma de saber si el listing es un auction.
-    //hay que implementar el hash como registro. hashIsAuctionActive mapping(bytes32 => bool)
+    /// @notice Accept a Buy Offer from other user
+    /// @param _NFTContract address of the NFT Collection
+    /// @param _tokenId ID of the token
+    /// @param _bidder user that placed the Buy Offer
+    /// @dev To avoid conflicts, Buy Offers can only be accepted if NFT is not a MarketItem or an AuctionItem.
+    /// This means that no MarketItem or AuctionItem should be deleted after accepting.
     function acceptBuyOffer(
         address _NFTContract,
-        uint256 _tokenId,
+        uint32 _tokenId,
         address _bidder
-    ) public nonReentrant onlyNotAuction(_NFTContract, _tokenId) {
-        bytes32 hash = makeHash(_NFTContract, _tokenId);
+    ) public payable nonReentrant onlyNotListed(_NFTContract, _tokenId) {
+        uint256 nftID = makeNftID(_NFTContract, _tokenId);
+
         require(
-            userToHashToBuyOfferHashesIndex[payable(_bidder)][hash].active ==
-                true,
+            _user_nftID_IndexOf_nftIDToBids[_bidder][nftID].isActive(),
             "No active offer found."
         );
 
-        uint256 htboIndex = userToHashToBuyOffersIndex[_bidder][hash].index;
-        uint256 bid = NFTHashToBuyOffers[hash][htboIndex];
-        uint256 htbohIndex = userToHashToBuyOfferHashesIndex[_bidder][hash]
-            .index;
+        uint256 boIndex = _user_nftID_IndexOf_nftIDToBids[_bidder][nftID]
+            .index();
+        uint256 bid = _nftIDToBids[nftID][boIndex];
+        uint256 uboIndex = _user_nftID_IndexOf_userToNftIDsWithBids[_bidder][
+            nftID
+        ].index();
 
-        //NFT transfer
+        //NFT transfer. Fails if msg.sender is not the owner of NFT.
         IERC721(_NFTContract).transferFrom(msg.sender, _bidder, _tokenId);
 
         emit BuyOfferAccepted(_bidder, _NFTContract, _tokenId, bid);
 
-        delete NFTHashToBuyOffers[hash][htboIndex];
-        delete userToBuyOfferHashes[_bidder][htbohIndex];
-        delete userToHashToBuyOffersIndex[_bidder][hash];
-        delete userToHashToBuyOfferHashesIndex[_bidder][hash];
+        delete _nftIDToBids[nftID][boIndex];
+        delete _indexOf_nftIDToBids_user[boIndex];
+        delete _userToNftIDsWithBids[_bidder][uboIndex];
 
-        (bool success, ) = payable(msg.sender).call{value: msg.value}("");
+        delete _user_nftID_IndexOf_nftIDToBids[_bidder][nftID];
+        delete _user_nftID_IndexOf_userToNftIDsWithBids[_bidder][nftID];
+
+        _pendingFunds -= bid;
+        // Payment & fee calculation
+        uint256 fee = bid * (getFee(_NFTContract) / 10000);
+        uint256 paymentToSeller = bid - fee;
+
+        (bool success, ) = payable(msg.sender).call{value: paymentToSeller}("");
         require(success, "Transfer failed.");
+    }
+
+    /// @notice Returns all Buy Offers for a given NFT
+    /// @param _NFTContract address of the NFT Collection
+    /// @param _tokenId ID of the token
+    /// @dev returns a tuplet of bids and address with sync'ed indexes
+    function getNFTBuyOffers(address _NFTContract, uint32 _tokenId)
+        public
+        view
+        returns (uint256[] memory, address[] memory)
+    {
+        uint256 nftID = makeNftID(_NFTContract, _tokenId);
+        address[] memory users = new address[](_nftIDToBids[nftID].length);
+
+        for (uint256 i = 0; i < _nftIDToBids[nftID].length; i++) {
+            users[i] = _indexOf_nftIDToBids_user[i];
+        }
+
+        return (_nftIDToBids[nftID], users);
+    }
+
+    /// @notice Returns all Buy Offers placed by the user
+    function getAllMyOffers()
+        public
+        view
+        returns (BuyOffer[] memory buyOffers)
+    {
+        require(_userToNftIDsWithBids[msg.sender].length != 0);
+        buyOffers = new BuyOffer[](_userToNftIDsWithBids[msg.sender].length);
+
+        for (uint256 i = 0; i < _userToNftIDsWithBids[msg.sender].length; i++) {
+            uint256 nftID = _userToNftIDsWithBids[msg.sender][i];
+            uint256 htboIndex = _user_nftID_IndexOf_nftIDToBids[msg.sender][
+                nftID
+            ].index();
+            uint256 bid = _nftIDToBids[nftID][htboIndex];
+
+            buyOffers[i] = BuyOffer(
+                address(uint160(nftID)),
+                payable(msg.sender),
+                uint32(nftID >> 160),
+                bid
+            );
+        }
     }
 }
