@@ -44,66 +44,76 @@ contract NFTMarketplaceAuctions is NFTMarketplace {
     }
 
     modifier onlyCurrentBidder(address _NFTContract, uint32 _tokenId) {
-        uint256 nftID = makeNftID(_NFTContract, _tokenId);
+        //uint256 nftID = makeNftID(_NFTContract, _tokenId);
         require(
-            payable(msg.sender) == _nftIDToAuctionItem[nftID].currentBidder,
+            msgSender() ==
+                _nftIDToAuctionItem[makeNftID(_NFTContract, _tokenId)]
+                    .currentBidder,
             "Sender is not current bidder"
         );
         _;
     }
 
     modifier onlyNotCurrentBidder(address _NFTContract, uint32 _tokenId) {
-        uint256 nftID = makeNftID(_NFTContract, _tokenId);
+        //uint256 nftID = makeNftID(_NFTContract, _tokenId);
         require(
-            payable(msg.sender) != _nftIDToAuctionItem[nftID].currentBidder,
+            msgSender() !=
+                _nftIDToAuctionItem[makeNftID(_NFTContract, _tokenId)]
+                    .currentBidder,
             "Current bidder can't perform this action"
         );
         _;
     }
 
     modifier onlyAfterStart(address _NFTContract, uint32 _tokenId) {
-        uint256 nftID = makeNftID(_NFTContract, _tokenId);
+        //uint256 nftID = makeNftID(_NFTContract, _tokenId);
         require(
-            _nftIDToAuctionItem[nftID].endsAt > 0,
+            _nftIDToAuctionItem[makeNftID(_NFTContract, _tokenId)].endsAt > 0,
             "Auction has not started or it's already finished"
         );
         _;
     }
 
     modifier onlyBeforeEnd(address _NFTContract, uint32 _tokenId) {
-        uint256 nftID = makeNftID(_NFTContract, _tokenId);
+        //uint256 nftID = makeNftID(_NFTContract, _tokenId);
         require(
-            block.timestamp < _nftIDToAuctionItem[nftID].endsAt,
+            block.timestamp <
+                _nftIDToAuctionItem[makeNftID(_NFTContract, _tokenId)].endsAt,
             "Auction already finished"
         );
         _;
     }
 
     modifier onlyAfterEnd(address _NFTContract, uint32 _tokenId) {
-        uint256 nftID = makeNftID(_NFTContract, _tokenId);
-        require(_nftIDToAuctionItem[nftID].endsAt > 0);
+        //uint256 nftID = makeNftID(_NFTContract, _tokenId);
         require(
-            block.timestamp > _nftIDToAuctionItem[nftID].endsAt,
+            _nftIDToAuctionItem[makeNftID(_NFTContract, _tokenId)].endsAt > 0
+        );
+        require(
+            block.timestamp >
+                _nftIDToAuctionItem[makeNftID(_NFTContract, _tokenId)].endsAt,
             "Auction must be finished to perform this action"
         );
         _;
     }
 
     modifier onlyNotAuction(address _NFTContract, uint32 _tokenId) {
-        uint256 nftID = makeNftID(_NFTContract, _tokenId);
+        //uint256 nftID = makeNftID(_NFTContract, _tokenId);
         require(
-            unpackMarketItemStatus(_nftIDToMarketItem[nftID].packedData) !=
-                Status.AUCTION,
+            unpackMarketItemStatus(
+                _nftIDToMarketItem[makeNftID(_NFTContract, _tokenId)].packedData
+            ) != Status.AUCTION,
             "Auction item is not allowed"
         );
         _;
     }
 
     modifier onlyAuction(address _NFTContract, uint32 _tokenId) {
-        uint256 nftID = makeNftID(_NFTContract, _tokenId);
+        //uint256 nftID = makeNftID(_NFTContract, _tokenId);
         require(
-            unpackMarketItemStatus(_nftIDToMarketItem[nftID].packedData) ==
-                Status.AUCTION,
+            unpackMarketItemStatus(
+                _nftIDToMarketItem[makeNftID(_NFTContract, _tokenId)].packedData
+            ) == Status.AUCTION,
             "Item is not for Auction"
         );
         _;
@@ -111,7 +121,7 @@ contract NFTMarketplaceAuctions is NFTMarketplace {
 
     modifier onlySenderWithPendingFunds() {
         require(
-            _userToPendingFunds[payable(msg.sender)] > 0,
+            _userToPendingFunds[msgSender()] > 0,
             "User has not pending funds"
         );
         _;
@@ -181,49 +191,51 @@ contract NFTMarketplaceAuctions is NFTMarketplace {
         require(_days >= 1 && _days <= MAX_DAYS, "Duration out of bounds");
 
         _itemIDs.increment();
-        uint256 itemId = uint32(_itemIDs.current());
 
         uint256 nftID = makeNftID(_NFTContract, _tokenId);
 
         uint256 packedData = 0;
         packedData |= uint160(_NFTContract);
         packedData |= uint256(_tokenId) << 160;
-        packedData |= uint256(itemId) << 192;
+        packedData |= uint256(uint32(_itemIDs.current())) << 192;
         packedData |= uint256(Status.AUCTION) << 224;
 
         _nftIDToMarketItem[nftID] = MarketItem(
             packedData,
             _floorPrice,
-            payable(msg.sender)
+            msgSender()
         );
-
-        // I can't figure out why the linter keeps giving me error when using days keyword
-        uint256 _seconds = _days * 24 * 60 * 60;
-        uint256 endsAt = block.timestamp + _seconds;
 
         _nftIDToAuctionItem[nftID] = AuctionItem(
             0,
-            endsAt,
+            block.timestamp + (_days * 24 * 60 * 60),
             payable(address(0))
         );
 
         emit MarketItemCreated(
-            itemId,
+            uint32(_itemIDs.current()),
             _tokenId,
             _floorPrice,
             _NFTContract,
-            payable(msg.sender)
+            msgSender()
         );
 
-        emit AuctionItemCreated(itemId, endsAt);
+        emit AuctionItemCreated(
+            uint32(_itemIDs.current()),
+            _nftIDToAuctionItem[nftID].endsAt
+        );
 
-        //NFT transfer from msg.sender to this contract
-        IERC721(_NFTContract).transferFrom(msg.sender, address(this), _tokenId);
+        //NFT transfer from msg sender to this contract
+        IERC721(_NFTContract).transferFrom(
+            msgSender(),
+            address(this),
+            _tokenId
+        );
 
         _activeItemsCount.increment();
-        _sellerToListedItemsCount[payable(msg.sender)].increment();
+        _sellerToListedItemsCount[msgSender()].increment();
 
-        return itemId;
+        return uint32(_itemIDs.current());
     }
 
     /// @notice Start an auction and create a bid for a whitelisted NFT belonging to owner()
@@ -234,57 +246,63 @@ contract NFTMarketplaceAuctions is NFTMarketplace {
         public
         payable
         nonReentrant
-        onlyNotListed(_NFTContract, _tokenId)
-        onlyNotBlockedItem(_NFTContract, _tokenId)
         onlyAuctionWhitelistedContract(_NFTContract)
         returns (uint256)
     {
-        uint256 floorPrice = _NFTContractToFloorPrice[_NFTContract];
-        require(floorPrice > 0, "Floor price must be greater than 0");
         require(
-            msg.value >= floorPrice,
+            _NFTContractToFloorPrice[_NFTContract] > 0,
+            "Floor price must be greater than 0"
+        );
+        require(
+            msg.value >= _NFTContractToFloorPrice[_NFTContract],
             "Value sent must be greater than floor price"
         );
 
-        uint256 _days = MAX_DAYS;
+        uint256 nftID = makeNftID(_NFTContract, _tokenId);
+        require(
+            unpackMarketItemStatus(_nftIDToMarketItem[nftID].packedData) ==
+                Status.NONE,
+            "Item not allowed"
+        );
+        require(!_nftIDToMarketItemBlacklist[nftID], "Item is blacklisted");
 
         _itemIDs.increment();
-        uint256 itemId = uint32(_itemIDs.current());
-
-        uint256 nftID = makeNftID(_NFTContract, _tokenId);
-
         uint256 packedData = uint256(0);
         packedData |= uint160(_NFTContract);
         packedData |= uint256(_tokenId) << 160;
-        packedData |= uint256(itemId) << 192;
+        packedData |= uint256(uint32(_itemIDs.current())) << 192;
         packedData |= uint256(Status.AUCTION) << 224;
 
         _nftIDToMarketItem[nftID] = MarketItem(
             packedData,
-            floorPrice,
+            _NFTContractToFloorPrice[_NFTContract],
             payable(owner())
         );
 
-        // I can't figure out why the linter keeps giving me error when using days keyword
-        uint256 _seconds = _days * 24 * 60 * 60;
-        uint256 endsAt = block.timestamp + _seconds;
-
         _nftIDToAuctionItem[nftID] = AuctionItem(
             msg.value,
-            endsAt,
-            payable(msg.sender)
+            block.timestamp + (MAX_DAYS * 24 * 60 * 60),
+            msgSender()
         );
 
         emit MarketItemCreated(
-            itemId,
+            uint32(_itemIDs.current()),
             _tokenId,
-            floorPrice,
+            _NFTContractToFloorPrice[_NFTContract],
             _NFTContract,
             owner()
         );
 
-        emit AuctionItemCreated(itemId, endsAt);
-        emit AuctionBidCreated(itemId, msg.value, payable(msg.sender), endsAt);
+        emit AuctionItemCreated(
+            uint32(_itemIDs.current()),
+            _nftIDToAuctionItem[nftID].endsAt
+        );
+        emit AuctionBidCreated(
+            uint32(_itemIDs.current()),
+            msg.value,
+            msgSender(),
+            _nftIDToAuctionItem[nftID].endsAt
+        );
 
         //NFT owner must be the same as this contract
         IERC721(_NFTContract).transferFrom(owner(), address(this), _tokenId);
@@ -292,7 +310,7 @@ contract NFTMarketplaceAuctions is NFTMarketplace {
         _activeItemsCount.increment();
         _pendingFunds += msg.value;
 
-        return itemId;
+        return uint32(_itemIDs.current());
     }
 
     /// @notice Creates a bid for a given NFT
@@ -327,7 +345,7 @@ contract NFTMarketplaceAuctions is NFTMarketplace {
         _pendingFunds += msg.value;
 
         _nftIDToAuctionItem[nftID].currentBid = msg.value;
-        _nftIDToAuctionItem[nftID].currentBidder = payable(msg.sender);
+        _nftIDToAuctionItem[nftID].currentBidder = msgSender();
         //if remaining days for auction to end are < 1, then reset endsAt to now + 1 day;
         uint256 remainingSeconds = (_nftIDToAuctionItem[nftID].endsAt -
             block.timestamp);
@@ -362,8 +380,7 @@ contract NFTMarketplaceAuctions is NFTMarketplace {
         uint256 nftID = makeNftID(_NFTContract, _tokenId);
         //if what address sends along with his pending funds is enough
         require(
-            (_userToPendingFunds[payable(msg.sender)] + msg.value) >=
-                _askingPrice,
+            (_userToPendingFunds[msgSender()] + msg.value) >= _askingPrice,
             "Not enough funds to cover current bid"
         );
         require(
@@ -378,7 +395,7 @@ contract NFTMarketplaceAuctions is NFTMarketplace {
         //calculate how much from user pending funds is part of this new bid
         uint256 substractFromPending = _askingPrice - msg.value;
         //substract that amount from user pending funds
-        _userToPendingFunds[payable(msg.sender)] -= substractFromPending;
+        _userToPendingFunds[msgSender()] -= substractFromPending;
 
         //add msg.value to general pending funds
         _pendingFunds += msg.value;
@@ -390,7 +407,7 @@ contract NFTMarketplaceAuctions is NFTMarketplace {
         _userToPendingFunds[previousBidder] += previousBid;
 
         _nftIDToAuctionItem[nftID].currentBid = _askingPrice;
-        _nftIDToAuctionItem[nftID].currentBidder = payable(msg.sender);
+        _nftIDToAuctionItem[nftID].currentBidder = msgSender();
 
         //if remaining days for auction to end are < 1, then reset endsAt to now + 1 day;
         uint256 remainingSeconds = (_nftIDToAuctionItem[nftID].endsAt -
@@ -414,12 +431,10 @@ contract NFTMarketplaceAuctions is NFTMarketplace {
         onlyNotOwner
         onlySenderWithPendingFunds
     {
-        uint256 userPendingFunds = _userToPendingFunds[payable(msg.sender)];
-        _userToPendingFunds[payable(msg.sender)] = 0;
+        uint256 userPendingFunds = _userToPendingFunds[msgSender()];
+        _userToPendingFunds[msgSender()] = 0;
         _pendingFunds -= userPendingFunds;
-        (bool success, ) = payable(msg.sender).call{value: userPendingFunds}(
-            ""
-        );
+        (bool success, ) = msgSender().call{value: userPendingFunds}("");
         require(success, "Transfer failed.");
     }
 

@@ -3,6 +3,7 @@ module.exports = {
     browser: true,
     es2021: true,
     node: true,
+    mocha: true,
   },
   extends: [
     "plugin:react/recommended",
@@ -21,5 +22,6 @@ module.exports = {
   rules: {
     "react/react-in-jsx-scope": "off",
     "react/prop-types": "off",
+    "no-unused-vars": "off",
   },
 };

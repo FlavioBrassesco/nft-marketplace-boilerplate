@@ -9,11 +9,19 @@ const from = process.env.OWNER_ADDRESS;
 const mnemonic = process.env.MNEMONIC;
 
 module.exports = {
-  solidity: "0.8.0",
+  solidity: {
+    version: "0.8.0",
+    settings: {
+      optimizer: {
+        enabled: true,
+        runs: 200,
+      },
+    },
+  },
   networks: {
     ganache: {
       from: "0xd94C02d5aeFE85C1878Dc632f5Ee02aaf4341d1c",
-      chainId: 8001,
+      chainId: 1337,
       url: "HTTP://127.0.0.1:7545",
       accounts: {
         mnemonic:

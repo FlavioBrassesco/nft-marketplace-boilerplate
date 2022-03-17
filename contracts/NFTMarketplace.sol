@@ -5,26 +5,33 @@ import "@openzeppelin/contracts/utils/Counters.sol";
 import "@openzeppelin/contracts/token/ERC721/ERC721.sol";
 import "@openzeppelin/contracts/security/ReentrancyGuard.sol";
 import "@openzeppelin/contracts/access/Ownable.sol";
+import "@openzeppelin/contracts/token/ERC721/utils/ERC721Holder.sol";
+import "./ContextMixin.sol";
 
 /// @title A simple NFT marketplace for collection owners.
 /// @author Flavio Brassesco
 /// @notice Users can use this marketplace to sell NFTs that are part of collections developed by the marketplace owner.
 /// @dev This should be paired with a webapp that has some kind of cache implemented.
 /// There are a few functions implemented that are useful to keep cache and on-chain data in sync.
-contract NFTMarketplace is ReentrancyGuard, Ownable {
+contract NFTMarketplace is
+    ReentrancyGuard,
+    Ownable,
+    ERC721Holder,
+    ContextMixin
+{
     using Counters for Counters.Counter;
 
     Counters.Counter internal _itemIDs;
     Counters.Counter internal _activeItemsCount;
 
-    /// Deactivates core functionality if things go wrong.
+    // Deactivates core functionality if things go wrong.
     bool internal panicSwitch;
 
-    /// Mapping for item storage.
-    /// Unique NFT ID = uint256(0) | address | tokenId<<160
+    // Mapping for item storage.
+    // Unique NFT ID = uint256(0) | address | tokenId<<160
     mapping(uint256 => MarketItem) internal _nftIDToMarketItem;
 
-    /// Mapping for item iteration
+    // Mapping for item iteration
     mapping(uint256 => uint256) internal _itemIDToNftID;
 
     mapping(address => Counters.Counter) internal _sellerToListedItemsCount;
@@ -35,9 +42,9 @@ contract NFTMarketplace is ReentrancyGuard, Ownable {
         AUCTION
     }
 
-    /// Cut 44% of cost by packing some variables.
-    /// packedData = uint256(0) | contractAddress<<0 | tokenId<<160 | itemId<<192 | status<<224
-    /// Both tokenId and itemId values are expected to not exceed 32bits.
+    // Cut 44% of cost by packing some variables.
+    // packedData = uint256(0) | contractAddress<<0 | tokenId<<160 | itemId<<192 | status<<224
+    // Both tokenId and itemId values are expected to not exceed 32bits.
     struct MarketItem {
         uint256 packedData;
         uint256 price;
@@ -49,7 +56,7 @@ contract NFTMarketplace is ReentrancyGuard, Ownable {
     mapping(address => uint256) internal _NFTContractToFee;
     mapping(address => uint256) internal _NFTContractToFloorPrice;
 
-    /// Useful to block some items from listing
+    // Useful to block some items from listing
     mapping(uint256 => bool) internal _nftIDToMarketItemBlacklist;
 
     /// @notice Logs when a NFT is listed for sale.
@@ -88,53 +95,53 @@ contract NFTMarketplace is ReentrancyGuard, Ownable {
     }
 
     modifier onlyNotListed(address _NFTContract, uint32 _tokenId) {
-        uint256 nftID = makeNftID(_NFTContract, _tokenId);
         require(
-            unpackMarketItemStatus(_nftIDToMarketItem[nftID].packedData) ==
-                Status.NONE,
+            unpackMarketItemStatus(
+                _nftIDToMarketItem[makeNftID(_NFTContract, _tokenId)].packedData
+            ) == Status.NONE,
             "Item not allowed"
         );
         _;
     }
 
     modifier onlyNotOwner() {
-        require(msg.sender != owner(), "Owner not allowed");
+        require(msgSender() != owner(), "Owner not allowed");
         _;
     }
 
     modifier onlyNotSeller(address _NFTContract, uint32 _tokenId) {
-        uint256 nftID = makeNftID(_NFTContract, _tokenId);
         require(
-            msg.sender != _nftIDToMarketItem[nftID].seller,
+            msgSender() !=
+                _nftIDToMarketItem[makeNftID(_NFTContract, _tokenId)].seller,
             "Seller not allowed"
         );
         _;
     }
 
     modifier onlySeller(address _NFTContract, uint32 _tokenId) {
-        uint256 nftID = makeNftID(_NFTContract, _tokenId);
         require(
-            payable(msg.sender) == _nftIDToMarketItem[nftID].seller,
+            msgSender() ==
+                _nftIDToMarketItem[makeNftID(_NFTContract, _tokenId)].seller,
             "Only seller allowed"
         );
         _;
     }
 
     modifier onlyNotForSale(address _NFTContract, uint32 _tokenId) {
-        uint256 nftID = makeNftID(_NFTContract, _tokenId);
         require(
-            unpackMarketItemStatus(_nftIDToMarketItem[nftID].packedData) !=
-                Status.FORSALE,
+            unpackMarketItemStatus(
+                _nftIDToMarketItem[makeNftID(_NFTContract, _tokenId)].packedData
+            ) != Status.FORSALE,
             "Item can't be for sale"
         );
         _;
     }
 
     modifier onlyForSale(address _NFTContract, uint32 _tokenId) {
-        uint256 nftID = makeNftID(_NFTContract, _tokenId);
         require(
-            unpackMarketItemStatus(_nftIDToMarketItem[nftID].packedData) ==
-                Status.FORSALE,
+            unpackMarketItemStatus(
+                _nftIDToMarketItem[makeNftID(_NFTContract, _tokenId)].packedData
+            ) == Status.FORSALE,
             "Item is not for sale"
         );
         _;
@@ -149,13 +156,15 @@ contract NFTMarketplace is ReentrancyGuard, Ownable {
     }
 
     modifier onlyNotBlockedItem(address _NFTContract, uint32 _tokenId) {
-        uint256 nftID = makeNftID(_NFTContract, _tokenId);
-        require(!_nftIDToMarketItemBlacklist[nftID], "Item is blacklisted");
+        require(
+            !_nftIDToMarketItemBlacklist[makeNftID(_NFTContract, _tokenId)],
+            "Item is blacklisted"
+        );
         _;
     }
 
     function getSellerItemsCount() public view returns (uint256) {
-        return _sellerToListedItemsCount[payable(msg.sender)].current();
+        return _sellerToListedItemsCount[msgSender()].current();
     }
 
     function getActiveItemsCount() public view returns (uint256) {
@@ -170,7 +179,7 @@ contract NFTMarketplace is ReentrancyGuard, Ownable {
     /// @param _tokenId The ID of the token
     /// @return uint256 unique NFT ID.
     function makeNftID(address _NFTContract, uint32 _tokenId)
-        public
+        internal
         pure
         returns (uint256)
     {
@@ -236,6 +245,15 @@ contract NFTMarketplace is ReentrancyGuard, Ownable {
     {
         require(_contractAddress != address(0), "Can't remove address(0)");
         delete _isWhitelistedNFTContract[_contractAddress];
+    }
+
+    function isWhitelistedNFTContract(address _contractAddress)
+        public
+        view
+        onlyOwner
+        returns (bool)
+    {
+        return _isWhitelistedNFTContract[_contractAddress];
     }
 
     /// @notice Set a secondary sales fee for a NFT collection. ie.: 1000 = 10.00%
@@ -345,26 +363,26 @@ contract NFTMarketplace is ReentrancyGuard, Ownable {
         packedData |= uint256(itemId) << 192;
         packedData |= uint256(Status.FORSALE) << 224;
 
-        _nftIDToMarketItem[nftID] = MarketItem(
-            packedData,
-            _price,
-            payable(msg.sender)
-        );
+        _nftIDToMarketItem[nftID] = MarketItem(packedData, _price, msgSender());
 
-        //NFT transfer from msg.sender to this contract
-        IERC721(_NFTContract).transferFrom(msg.sender, address(this), _tokenId);
+        //NFT transfer from msg sender to this contract
+        IERC721(_NFTContract).transferFrom(
+            msgSender(),
+            address(this),
+            _tokenId
+        );
 
         emit MarketItemCreated(
             itemId,
             _tokenId,
             _price,
             _NFTContract,
-            payable(msg.sender)
+            msgSender()
         );
 
         _activeItemsCount.increment();
 
-        _sellerToListedItemsCount[payable(msg.sender)].increment();
+        _sellerToListedItemsCount[msgSender()].increment();
     }
 
     /// @notice Cancels a listing.
@@ -391,7 +409,7 @@ contract NFTMarketplace is ReentrancyGuard, Ownable {
 
         IERC721(contractAddress).transferFrom(
             address(this),
-            msg.sender,
+            msgSender(),
             tokenId
         );
 
@@ -403,7 +421,7 @@ contract NFTMarketplace is ReentrancyGuard, Ownable {
             _nftIDToMarketItem[nftID].seller
         );
 
-        _destroyMarketItem(payable(msg.sender), nftID);
+        _destroyMarketItem(msgSender(), nftID);
     }
 
     /// @dev Destroys a created market item.
@@ -443,7 +461,7 @@ contract NFTMarketplace is ReentrancyGuard, Ownable {
         _itemIDs.increment();
 
         // NFT transfer
-        IERC721(_NFTContract).transferFrom(owner(), msg.sender, _tokenId);
+        IERC721(_NFTContract).transferFrom(owner(), msgSender(), _tokenId);
 
         emit MarketItemSold(
             _itemIDs.current(),
@@ -451,7 +469,7 @@ contract NFTMarketplace is ReentrancyGuard, Ownable {
             floorPrice,
             _NFTContract,
             owner(),
-            payable(msg.sender)
+            msgSender()
         );
 
         // This is used instead of transfer or send because of raising gas costs in ethereum blockchain
@@ -493,7 +511,7 @@ contract NFTMarketplace is ReentrancyGuard, Ownable {
         // NFT transfer
         IERC721(contractAddress).transferFrom(
             address(this),
-            msg.sender,
+            msgSender(),
             tokenId
         );
 
@@ -503,7 +521,7 @@ contract NFTMarketplace is ReentrancyGuard, Ownable {
             price,
             contractAddress,
             seller,
-            payable(msg.sender)
+            msgSender()
         );
 
         _destroyMarketItem(seller, nftID);
