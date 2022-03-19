@@ -4,7 +4,7 @@ pragma solidity ^0.8.0;
 
 import "./ERC721URIStorage.sol";
 import "./ContextMixin.sol";
-import "./NativeMetaTransaction.sol";
+import "./NativeMetaTransactionCalldata.sol";
 import "@openzeppelin/contracts/access/Ownable.sol";
 import "@openzeppelin/contracts/utils/Counters.sol";
 
@@ -15,13 +15,14 @@ import "@openzeppelin/contracts/utils/Counters.sol";
 contract NFTMinter is
     ERC721URIStorage,
     ContextMixin,
-    NativeMetaTransaction,
+    NativeMetaTransactionCalldata,
     Ownable
 {
     using Counters for Counters.Counter;
     Counters.Counter private _tokenIds;
 
     uint256 internal constant MAX_SUPPLY = 10000;
+    uint256 internal constant FLOOR_PRICE = 0.001 ether;
 
     constructor(string memory _name, string memory _symbol)
         ERC721(_name, _symbol)
@@ -58,12 +59,17 @@ contract NFTMinter is
     /// @notice Mint NFTs with associated metadata URI
     /// @param _to address to be the owner of minted NFT
     /// @param _tokenURI associated metadata URI of minted NFT
-    /// @dev remove onlyOwner and add a required msg.value if you want to let other people mint by paying a fee
     function mint(address _to, string memory _tokenURI)
         public
-        onlyOwner
+        payable
         returns (uint256)
     {
+        if (msgSender() != owner()) {
+            require(
+                msg.value == FLOOR_PRICE,
+                "Value sent should be equal to floor price"
+            );
+        }
         require(
             _tokenIds.current() < MAX_SUPPLY,
             "Maximum supply of tokens already minted."

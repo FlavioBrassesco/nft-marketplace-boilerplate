@@ -17,7 +17,7 @@ contract NFTMarketplaceAuctions is NFTMarketplace {
     struct AuctionItem {
         uint256 currentBid;
         uint256 endsAt;
-        address payable currentBidder;
+        address currentBidder;
     }
 
     mapping(uint256 => AuctionItem) internal _nftIDToAuctionItem;
@@ -39,14 +39,14 @@ contract NFTMarketplaceAuctions is NFTMarketplace {
         uint256 endsAt
     );
 
-    constructor() {
+    constructor(string memory name_) NFTMarketplace(name_) {
         _pendingFunds = 0;
     }
 
     modifier onlyCurrentBidder(address _NFTContract, uint32 _tokenId) {
         //uint256 nftID = makeNftID(_NFTContract, _tokenId);
         require(
-            msgSender() ==
+            _msgSender() ==
                 _nftIDToAuctionItem[makeNftID(_NFTContract, _tokenId)]
                     .currentBidder,
             "Sender is not current bidder"
@@ -57,7 +57,7 @@ contract NFTMarketplaceAuctions is NFTMarketplace {
     modifier onlyNotCurrentBidder(address _NFTContract, uint32 _tokenId) {
         //uint256 nftID = makeNftID(_NFTContract, _tokenId);
         require(
-            msgSender() !=
+            _msgSender() !=
                 _nftIDToAuctionItem[makeNftID(_NFTContract, _tokenId)]
                     .currentBidder,
             "Current bidder can't perform this action"
@@ -121,7 +121,7 @@ contract NFTMarketplaceAuctions is NFTMarketplace {
 
     modifier onlySenderWithPendingFunds() {
         require(
-            _userToPendingFunds[msgSender()] > 0,
+            _userToPendingFunds[_msgSender()] > 0,
             "User has not pending funds"
         );
         _;
@@ -203,13 +203,13 @@ contract NFTMarketplaceAuctions is NFTMarketplace {
         _nftIDToMarketItem[nftID] = MarketItem(
             packedData,
             _floorPrice,
-            msgSender()
+            _msgSender()
         );
 
         _nftIDToAuctionItem[nftID] = AuctionItem(
             0,
             block.timestamp + (_days * 24 * 60 * 60),
-            payable(address(0))
+            address(0)
         );
 
         emit MarketItemCreated(
@@ -217,7 +217,7 @@ contract NFTMarketplaceAuctions is NFTMarketplace {
             _tokenId,
             _floorPrice,
             _NFTContract,
-            msgSender()
+            _msgSender()
         );
 
         emit AuctionItemCreated(
@@ -226,14 +226,14 @@ contract NFTMarketplaceAuctions is NFTMarketplace {
         );
 
         //NFT transfer from msg sender to this contract
-        IERC721(_NFTContract).transferFrom(
-            msgSender(),
+        IERC721(_NFTContract).safeTransferFrom(
+            _msgSender(),
             address(this),
             _tokenId
         );
 
         _activeItemsCount.increment();
-        _sellerToListedItemsCount[msgSender()].increment();
+        _sellerToListedItemsCount[_msgSender()].increment();
 
         return uint32(_itemIDs.current());
     }
@@ -264,7 +264,6 @@ contract NFTMarketplaceAuctions is NFTMarketplace {
                 Status.NONE,
             "Item not allowed"
         );
-        require(!_nftIDToMarketItemBlacklist[nftID], "Item is blacklisted");
 
         _itemIDs.increment();
         uint256 packedData = uint256(0);
@@ -276,13 +275,13 @@ contract NFTMarketplaceAuctions is NFTMarketplace {
         _nftIDToMarketItem[nftID] = MarketItem(
             packedData,
             _NFTContractToFloorPrice[_NFTContract],
-            payable(owner())
+            owner()
         );
 
         _nftIDToAuctionItem[nftID] = AuctionItem(
             msg.value,
             block.timestamp + (MAX_DAYS * 24 * 60 * 60),
-            msgSender()
+            _msgSender()
         );
 
         emit MarketItemCreated(
@@ -300,12 +299,16 @@ contract NFTMarketplaceAuctions is NFTMarketplace {
         emit AuctionBidCreated(
             uint32(_itemIDs.current()),
             msg.value,
-            msgSender(),
+            _msgSender(),
             _nftIDToAuctionItem[nftID].endsAt
         );
 
         //NFT owner must be the same as this contract
-        IERC721(_NFTContract).transferFrom(owner(), address(this), _tokenId);
+        IERC721(_NFTContract).safeTransferFrom(
+            owner(),
+            address(this),
+            _tokenId
+        );
 
         _activeItemsCount.increment();
         _pendingFunds += msg.value;
@@ -334,8 +337,7 @@ contract NFTMarketplaceAuctions is NFTMarketplace {
 
         //if it is not the first bid
         if (_nftIDToAuctionItem[nftID].currentBidder != address(0)) {
-            address payable previousBidder = _nftIDToAuctionItem[nftID]
-                .currentBidder;
+            address previousBidder = _nftIDToAuctionItem[nftID].currentBidder;
             uint256 previousBid = _nftIDToAuctionItem[nftID].currentBid;
             //update pending funds for previousBidder
             _userToPendingFunds[previousBidder] += previousBid;
@@ -345,7 +347,7 @@ contract NFTMarketplaceAuctions is NFTMarketplace {
         _pendingFunds += msg.value;
 
         _nftIDToAuctionItem[nftID].currentBid = msg.value;
-        _nftIDToAuctionItem[nftID].currentBidder = msgSender();
+        _nftIDToAuctionItem[nftID].currentBidder = _msgSender();
         //if remaining days for auction to end are < 1, then reset endsAt to now + 1 day;
         uint256 remainingSeconds = (_nftIDToAuctionItem[nftID].endsAt -
             block.timestamp);
@@ -380,7 +382,7 @@ contract NFTMarketplaceAuctions is NFTMarketplace {
         uint256 nftID = makeNftID(_NFTContract, _tokenId);
         //if what address sends along with his pending funds is enough
         require(
-            (_userToPendingFunds[msgSender()] + msg.value) >= _askingPrice,
+            (_userToPendingFunds[_msgSender()] + msg.value) >= _askingPrice,
             "Not enough funds to cover current bid"
         );
         require(
@@ -395,19 +397,18 @@ contract NFTMarketplaceAuctions is NFTMarketplace {
         //calculate how much from user pending funds is part of this new bid
         uint256 substractFromPending = _askingPrice - msg.value;
         //substract that amount from user pending funds
-        _userToPendingFunds[msgSender()] -= substractFromPending;
+        _userToPendingFunds[_msgSender()] -= substractFromPending;
 
         //add msg.value to general pending funds
         _pendingFunds += msg.value;
 
         //update pending funds for previousBidder
-        address payable previousBidder = _nftIDToAuctionItem[nftID]
-            .currentBidder;
+        address previousBidder = _nftIDToAuctionItem[nftID].currentBidder;
         uint256 previousBid = _nftIDToAuctionItem[nftID].currentBid;
         _userToPendingFunds[previousBidder] += previousBid;
 
         _nftIDToAuctionItem[nftID].currentBid = _askingPrice;
-        _nftIDToAuctionItem[nftID].currentBidder = msgSender();
+        _nftIDToAuctionItem[nftID].currentBidder = _msgSender();
 
         //if remaining days for auction to end are < 1, then reset endsAt to now + 1 day;
         uint256 remainingSeconds = (_nftIDToAuctionItem[nftID].endsAt -
@@ -431,10 +432,10 @@ contract NFTMarketplaceAuctions is NFTMarketplace {
         onlyNotOwner
         onlySenderWithPendingFunds
     {
-        uint256 userPendingFunds = _userToPendingFunds[msgSender()];
-        _userToPendingFunds[msgSender()] = 0;
+        uint256 userPendingFunds = _userToPendingFunds[_msgSender()];
+        _userToPendingFunds[_msgSender()] = 0;
         _pendingFunds -= userPendingFunds;
-        (bool success, ) = msgSender().call{value: userPendingFunds}("");
+        (bool success, ) = _msgSender().call{value: userPendingFunds}("");
         require(success, "Transfer failed.");
     }
 
@@ -464,7 +465,7 @@ contract NFTMarketplaceAuctions is NFTMarketplace {
             uint256 payment = _nftIDToAuctionItem[nftID].currentBid;
 
             //NFT transfer
-            IERC721(contractAddress).transferFrom(
+            IERC721(contractAddress).safeTransferFrom(
                 address(this),
                 newOwner,
                 tokenId
@@ -488,15 +489,15 @@ contract NFTMarketplaceAuctions is NFTMarketplace {
             _pendingFunds -= payment;
 
             // Payment & fee calculation
-            uint256 fee = payment * (getFee(_NFTContract) / 10000);
-            uint256 paymentToSeller = payment - fee;
+            uint256 paymentToSeller = payment -
+                mulDiv(getFee(_NFTContract), payment, 100);
 
             (bool success, ) = seller.call{value: paymentToSeller}("");
             require(success, "Transfer failed.");
         } else {
             //is not sold so we return the NFT.
 
-            IERC721(contractAddress).transferFrom(
+            IERC721(contractAddress).safeTransferFrom(
                 address(this),
                 _nftIDToMarketItem[nftID].seller,
                 tokenId
@@ -582,7 +583,7 @@ contract NFTMarketplaceAuctions is NFTMarketplace {
     function transferSalesFees() public override onlyOwner {
         uint256 pendingFunds = address(this).balance - _pendingFunds;
         require(pendingFunds > 0, "No pending funds to retrieve");
-        (bool success, ) = payable(owner()).call{value: pendingFunds}("");
+        (bool success, ) = owner().call{value: pendingFunds}("");
         require(success, "Transfer failed.");
     }
 }

@@ -29,7 +29,7 @@ contract NFTMarketplaceBuyOffer is NFTMarketplaceAuctions {
     /// Only for viewing purposes
     struct BuyOffer {
         address contractAddress;
-        address payable userAddress;
+        address userAddress;
         uint32 tokenId;
         uint256 bid;
     }
@@ -53,6 +53,8 @@ contract NFTMarketplaceBuyOffer is NFTMarketplaceAuctions {
         uint256 bid
     );
 
+    constructor(string memory name_) NFTMarketplaceAuctions(name_) {}
+
     /// @notice Create a Buy Offer for an NFT
     /// @param _NFTContract address of the NFT Collection
     /// @param _tokenId ID of the token
@@ -63,32 +65,30 @@ contract NFTMarketplaceBuyOffer is NFTMarketplaceAuctions {
         payable
         nonReentrant
         onlyNotListed(_NFTContract, _tokenId)
-        onlyNotBlockedItem(_NFTContract, _tokenId)
         onlyNotAuction(_NFTContract, _tokenId)
     {
         require(msg.value > 0, "Price must be at least 1 wei");
 
         uint256 nftID = makeNftID(_NFTContract, _tokenId);
         require(
-            !_user_nftID_IndexOf_userToNftIDsWithBids[msgSender()][nftID]
+            !_user_nftID_IndexOf_userToNftIDsWithBids[_msgSender()][nftID]
                 .isActive(),
             "Offer for this listing already exists"
         );
 
-        _user_nftID_IndexOf_nftIDToBids[msgSender()][nftID].storeIndex(
+        _user_nftID_IndexOf_nftIDToBids[_msgSender()][nftID].storeIndex(
             _nftIDToBids[nftID].length
         );
-        _indexOf_nftIDToBids_user[_nftIDToBids[nftID].length] = msgSender();
+        _indexOf_nftIDToBids_user[_nftIDToBids[nftID].length] = _msgSender();
         _nftIDToBids[nftID].push(msg.value);
 
-        _user_nftID_IndexOf_userToNftIDsWithBids[msgSender()][nftID].storeIndex(
-                _userToNftIDsWithBids[msgSender()].length
-            );
-        _userToNftIDsWithBids[msgSender()].push(nftID);
+        _user_nftID_IndexOf_userToNftIDsWithBids[_msgSender()][nftID]
+            .storeIndex(_userToNftIDsWithBids[_msgSender()].length);
+        _userToNftIDsWithBids[_msgSender()].push(nftID);
 
         _pendingFunds += msg.value;
 
-        emit BuyOfferCreated(msgSender(), _NFTContract, _tokenId, msg.value);
+        emit BuyOfferCreated(_msgSender(), _NFTContract, _tokenId, msg.value);
     }
 
     /// @notice Cancels a Buy Offer for the specified NFT
@@ -102,28 +102,28 @@ contract NFTMarketplaceBuyOffer is NFTMarketplaceAuctions {
         uint256 nftID = makeNftID(_NFTContract, _tokenId);
 
         require(
-            _user_nftID_IndexOf_nftIDToBids[msgSender()][nftID].isActive(),
+            _user_nftID_IndexOf_nftIDToBids[_msgSender()][nftID].isActive(),
             "No active offer found."
         );
 
-        uint256 boIndex = _user_nftID_IndexOf_nftIDToBids[msgSender()][nftID]
+        uint256 boIndex = _user_nftID_IndexOf_nftIDToBids[_msgSender()][nftID]
             .index();
         uint256 bid = _nftIDToBids[nftID][boIndex];
         uint256 uboIndex = _user_nftID_IndexOf_userToNftIDsWithBids[
-            msgSender()
+            _msgSender()
         ][nftID].index();
 
         //money gets into user pool. User must call retrievePendingFunds to transfer to his wallet
-        _userToPendingFunds[msgSender()] += bid;
+        _userToPendingFunds[_msgSender()] += bid;
 
-        emit BuyOfferCancelled(msgSender(), _NFTContract, _tokenId, bid);
+        emit BuyOfferCancelled(_msgSender(), _NFTContract, _tokenId, bid);
 
         delete _nftIDToBids[nftID][boIndex];
         delete _indexOf_nftIDToBids_user[boIndex];
-        delete _userToNftIDsWithBids[msgSender()][uboIndex];
+        delete _userToNftIDsWithBids[_msgSender()][uboIndex];
 
-        delete _user_nftID_IndexOf_nftIDToBids[msgSender()][nftID];
-        delete _user_nftID_IndexOf_userToNftIDsWithBids[msgSender()][nftID];
+        delete _user_nftID_IndexOf_nftIDToBids[_msgSender()][nftID];
+        delete _user_nftID_IndexOf_userToNftIDsWithBids[_msgSender()][nftID];
     }
 
     /// @notice Accept a Buy Offer from other user
@@ -152,7 +152,7 @@ contract NFTMarketplaceBuyOffer is NFTMarketplaceAuctions {
         ].index();
 
         //NFT transfer. Fails if msg sender is not the owner of NFT.
-        IERC721(_NFTContract).transferFrom(msgSender(), _bidder, _tokenId);
+        IERC721(_NFTContract).safeTransferFrom(_msgSender(), _bidder, _tokenId);
 
         emit BuyOfferAccepted(_bidder, _NFTContract, _tokenId, bid);
 
@@ -164,11 +164,11 @@ contract NFTMarketplaceBuyOffer is NFTMarketplaceAuctions {
         delete _user_nftID_IndexOf_userToNftIDsWithBids[_bidder][nftID];
 
         _pendingFunds -= bid;
-        // Payment & fee calculation
-        uint256 fee = bid * (getFee(_NFTContract) / 10000);
-        uint256 paymentToSeller = bid - fee;
 
-        (bool success, ) = msgSender().call{value: paymentToSeller}("");
+        // Payment & fee calculation
+        uint256 paymentToSeller = bid - mulDiv(getFee(_NFTContract), bid, 100);
+
+        (bool success, ) = _msgSender().call{value: paymentToSeller}("");
         require(success, "Transfer failed.");
     }
 
@@ -197,23 +197,23 @@ contract NFTMarketplaceBuyOffer is NFTMarketplaceAuctions {
         view
         returns (BuyOffer[] memory buyOffers)
     {
-        require(_userToNftIDsWithBids[msgSender()].length != 0);
-        buyOffers = new BuyOffer[](_userToNftIDsWithBids[msgSender()].length);
+        require(_userToNftIDsWithBids[_msgSender()].length != 0);
+        buyOffers = new BuyOffer[](_userToNftIDsWithBids[_msgSender()].length);
 
         for (
             uint256 i = 0;
-            i < _userToNftIDsWithBids[msgSender()].length;
+            i < _userToNftIDsWithBids[_msgSender()].length;
             i++
         ) {
-            uint256 nftID = _userToNftIDsWithBids[msgSender()][i];
-            uint256 htboIndex = _user_nftID_IndexOf_nftIDToBids[msgSender()][
+            uint256 nftID = _userToNftIDsWithBids[_msgSender()][i];
+            uint256 htboIndex = _user_nftID_IndexOf_nftIDToBids[_msgSender()][
                 nftID
             ].index();
             uint256 bid = _nftIDToBids[nftID][htboIndex];
 
             buyOffers[i] = BuyOffer(
                 address(uint160(nftID)),
-                msgSender(),
+                _msgSender(),
                 uint32(nftID >> 160),
                 bid
             );

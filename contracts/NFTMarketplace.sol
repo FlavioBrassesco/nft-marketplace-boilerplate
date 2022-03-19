@@ -7,6 +7,8 @@ import "@openzeppelin/contracts/security/ReentrancyGuard.sol";
 import "@openzeppelin/contracts/access/Ownable.sol";
 import "@openzeppelin/contracts/token/ERC721/utils/ERC721Holder.sol";
 import "./ContextMixin.sol";
+import "./libraries/abdk/ABDKMathQuad.sol";
+import "./NativeMetaTransactionCalldata.sol";
 
 /// @title A simple NFT marketplace for collection owners.
 /// @author Flavio Brassesco
@@ -17,7 +19,8 @@ contract NFTMarketplace is
     ReentrancyGuard,
     Ownable,
     ERC721Holder,
-    ContextMixin
+    ContextMixin,
+    NativeMetaTransactionCalldata
 {
     using Counters for Counters.Counter;
 
@@ -48,16 +51,13 @@ contract NFTMarketplace is
     struct MarketItem {
         uint256 packedData;
         uint256 price;
-        address payable seller;
+        address seller;
     }
 
     // Contract Address Management
     mapping(address => bool) internal _isWhitelistedNFTContract;
     mapping(address => uint256) internal _NFTContractToFee;
     mapping(address => uint256) internal _NFTContractToFloorPrice;
-
-    // Useful to block some items from listing
-    mapping(uint256 => bool) internal _nftIDToMarketItemBlacklist;
 
     /// @notice Logs when a NFT is listed for sale.
     event MarketItemCreated(
@@ -87,6 +87,21 @@ contract NFTMarketplace is
         address owner
     );
 
+    string private _name;
+
+    constructor(string memory name_) {
+        _name = name_;
+        _initializeEIP712(name_);
+    }
+
+    function name() public view virtual returns (string memory) {
+        return _name;
+    }
+
+    function _msgSender() internal view override returns (address sender) {
+        return ContextMixin.msgSender();
+    }
+
     // The content of the following modifiers is pretty self explanatory.
 
     modifier onlyNotPanic() {
@@ -105,13 +120,13 @@ contract NFTMarketplace is
     }
 
     modifier onlyNotOwner() {
-        require(msgSender() != owner(), "Owner not allowed");
+        require(_msgSender() != owner(), "Owner not allowed");
         _;
     }
 
     modifier onlyNotSeller(address _NFTContract, uint32 _tokenId) {
         require(
-            msgSender() !=
+            _msgSender() !=
                 _nftIDToMarketItem[makeNftID(_NFTContract, _tokenId)].seller,
             "Seller not allowed"
         );
@@ -120,7 +135,7 @@ contract NFTMarketplace is
 
     modifier onlySeller(address _NFTContract, uint32 _tokenId) {
         require(
-            msgSender() ==
+            _msgSender() ==
                 _nftIDToMarketItem[makeNftID(_NFTContract, _tokenId)].seller,
             "Only seller allowed"
         );
@@ -155,16 +170,29 @@ contract NFTMarketplace is
         _;
     }
 
-    modifier onlyNotBlockedItem(address _NFTContract, uint32 _tokenId) {
-        require(
-            !_nftIDToMarketItemBlacklist[makeNftID(_NFTContract, _tokenId)],
-            "Item is blacklisted"
-        );
-        _;
+    function mulDiv(
+        uint256 x,
+        uint256 y,
+        uint256 z
+    ) public pure returns (uint256) {
+        return
+            ABDKMathQuad.toUInt(
+                ABDKMathQuad.div(
+                    ABDKMathQuad.mul(
+                        ABDKMathQuad.fromUInt(x),
+                        ABDKMathQuad.fromUInt(y)
+                    ),
+                    ABDKMathQuad.fromUInt(z)
+                )
+            );
     }
 
-    function getSellerItemsCount() public view returns (uint256) {
-        return _sellerToListedItemsCount[msgSender()].current();
+    function getSellerItemsCount(address _seller)
+        public
+        view
+        returns (uint256)
+    {
+        return _sellerToListedItemsCount[_seller].current();
     }
 
     function getActiveItemsCount() public view returns (uint256) {
@@ -256,7 +284,7 @@ contract NFTMarketplace is
         return _isWhitelistedNFTContract[_contractAddress];
     }
 
-    /// @notice Set a secondary sales fee for a NFT collection. ie.: 1000 = 10.00%
+    /// @notice Set a secondary sales fee for a NFT collection.
     /// @dev onlyOwner function to set fee for all items in a NFT collection.
     /// @param _NFTContract address of NFT collection.
     /// @param _fee secondary sales fee for _NFTContract.
@@ -264,13 +292,13 @@ contract NFTMarketplace is
         require(_NFTContract != address(0), "Can't set fee for address(0)");
 
         // Edit this line to change the maximum fee.
-        require(_fee < 5001, "Can't set fee higher than 50.00%");
+        require(_fee < 51, "Can't set fee higher than 50.00%");
         _NFTContractToFee[_NFTContract] = _fee;
     }
 
     /// @notice Returns the secondary sales fee for the specified NFT collection.
     /// @param _NFTContract address of NFT collection
-    /// @return uint256 secondary sales fee. ie.: 1000 = 10.00%
+    /// @return uint256 secondary sales fee.
     function getFee(address _NFTContract) public view returns (uint256) {
         require(_NFTContract != address(0), "Can't get fee for address(0)");
         return _NFTContractToFee[_NFTContract];
@@ -303,37 +331,6 @@ contract NFTMarketplace is
         return _NFTContractToFloorPrice[_NFTContract];
     }
 
-    /// @notice Blocks the specified NFT from listing in the marketplace.
-    /// @dev onlyOwner function to add a contract and token ID pairing to the marketplace blacklist.
-    /// When the marketplace owner adds a NFT contract to the marketplace whitelist,
-    /// it allows already minted NFTs (belonging to the owner) to be buyed through the function createMarketOwnerSale,
-    /// even if they are not listed in the front-end (ie.: a bot buying directly from this contract).
-    /// More on this on createMarketOwnerSale.
-    /// This function should be used to preserve some of those NFTs from selling.
-    /// Given that this blocks only one item per call, it is not a gas efficient way to block multiple NFTs.
-    /// Some options could be implemented such as a packed range block, or a packed array block at the cost
-    /// of a more expensive modifier onlyNotBlockedItem
-    /// @param _NFTContract address of NFT collection
-    /// @param _tokenId  token ID to be blocked
-    function addBlockedMarketItem(address _NFTContract, uint32 _tokenId)
-        public
-        onlyOwner
-        onlyWhitelistedContract(_NFTContract)
-        onlyNotListed(_NFTContract, _tokenId)
-    {
-        uint256 nftID = makeNftID(_NFTContract, _tokenId);
-        _nftIDToMarketItemBlacklist[nftID] = true;
-    }
-
-    /// @notice Unblocks the specified NFT from listing in the marketplace.
-    function removeBlockedMarketItem(address _NFTContract, uint32 _tokenId)
-        public
-        onlyOwner
-    {
-        uint256 nftID = makeNftID(_NFTContract, _tokenId);
-        delete _nftIDToMarketItemBlacklist[nftID];
-    }
-
     /// @notice List a NFT for sale.
     /// @dev This function is meant to be used by secondary sellers.
     /// Set to payable and require a value if you want to charge a commission for listing.
@@ -346,6 +343,7 @@ contract NFTMarketplace is
         uint256 _price
     )
         public
+        payable
         nonReentrant
         onlyWhitelistedContract(_NFTContract)
         onlyNotListed(_NFTContract, _tokenId)
@@ -363,11 +361,15 @@ contract NFTMarketplace is
         packedData |= uint256(itemId) << 192;
         packedData |= uint256(Status.FORSALE) << 224;
 
-        _nftIDToMarketItem[nftID] = MarketItem(packedData, _price, msgSender());
+        _nftIDToMarketItem[nftID] = MarketItem(
+            packedData,
+            _price,
+            _msgSender()
+        );
 
         //NFT transfer from msg sender to this contract
-        IERC721(_NFTContract).transferFrom(
-            msgSender(),
+        IERC721(_NFTContract).safeTransferFrom(
+            _msgSender(),
             address(this),
             _tokenId
         );
@@ -377,12 +379,12 @@ contract NFTMarketplace is
             _tokenId,
             _price,
             _NFTContract,
-            msgSender()
+            _msgSender()
         );
 
         _activeItemsCount.increment();
 
-        _sellerToListedItemsCount[msgSender()].increment();
+        _sellerToListedItemsCount[_msgSender()].increment();
     }
 
     /// @notice Cancels a listing.
@@ -407,9 +409,9 @@ contract NFTMarketplace is
             _nftIDToMarketItem[nftID].packedData
         );
 
-        IERC721(contractAddress).transferFrom(
+        IERC721(contractAddress).safeTransferFrom(
             address(this),
-            msgSender(),
+            _msgSender(),
             tokenId
         );
 
@@ -421,7 +423,7 @@ contract NFTMarketplace is
             _nftIDToMarketItem[nftID].seller
         );
 
-        _destroyMarketItem(msgSender(), nftID);
+        _destroyMarketItem(_msgSender(), nftID);
     }
 
     /// @dev Destroys a created market item.
@@ -434,21 +436,22 @@ contract NFTMarketplace is
     }
 
     /// @notice Buy a non-listed-in-marketplace item. Only NFTs belonging to the marketplace owner.
-    /// @dev public payable function to buy a non-listed-in-marketplace item.
-    /// This is useful when the owner of the marketplace wants to sell an entire collection
-    /// and save the gas cost (and time) for listing all items.
-    /// To avoid users (and specially bots) to buy non-listed-in-marketplace items, a blacklist is implemented to block those items.
-    /// Owner of the marketplace must be the owner of the NFT Contract for the item.
+    /// @dev public payable function to buy a non-listed-on-chain marketplace item through a metatransaction
     /// @param _NFTContract address of the NFT contract
     /// @param _tokenId ID of the NFT Token
-    function createMarketOwnerSale(address _NFTContract, uint32 _tokenId)
+    /// @param _to address of buyer
+    function createMarketOwnerSale(
+        address _to,
+        address _NFTContract,
+        uint32 _tokenId
+    )
         public
         payable
         virtual
         nonReentrant
         onlyWhitelistedContract(_NFTContract)
         onlyNotListed(_NFTContract, _tokenId)
-        onlyNotBlockedItem(_NFTContract, _tokenId)
+        onlyOwner
     {
         require(
             _NFTContract != address(0),
@@ -461,21 +464,21 @@ contract NFTMarketplace is
         _itemIDs.increment();
 
         // NFT transfer
-        IERC721(_NFTContract).transferFrom(owner(), msgSender(), _tokenId);
+        IERC721(_NFTContract).safeTransferFrom(_msgSender(), _to, _tokenId);
 
         emit MarketItemSold(
             _itemIDs.current(),
             _tokenId,
             floorPrice,
             _NFTContract,
-            owner(),
-            msgSender()
+            _msgSender(),
+            _to
         );
 
         // This is used instead of transfer or send because of raising gas costs in ethereum blockchain
         // @link https://ethereum.stackexchange.com/questions/78124/is-transfer-still-safe-after-the-istanbul-update
         // for other blockchains the use of transfer or send might be ok.
-        (bool success, ) = payable(owner()).call{value: msg.value}("");
+        (bool success, ) = _msgSender().call{value: msg.value}("");
         require(success, "Transfer failed.");
     }
 
@@ -505,13 +508,13 @@ contract NFTMarketplace is
         require(msg.value == price, "msg.value is not == Asking price");
 
         // Payment & fee calculation
-        uint256 fee = msg.value * (getFee(contractAddress) / 10000);
-        uint256 paymentToSeller = msg.value - fee;
+        uint256 paymentToSeller = msg.value -
+            mulDiv(getFee(contractAddress), msg.value, 100);
 
         // NFT transfer
-        IERC721(contractAddress).transferFrom(
+        IERC721(contractAddress).safeTransferFrom(
             address(this),
-            msgSender(),
+            _msgSender(),
             tokenId
         );
 
@@ -521,7 +524,7 @@ contract NFTMarketplace is
             price,
             contractAddress,
             seller,
-            msgSender()
+            _msgSender()
         );
 
         _destroyMarketItem(seller, nftID);
@@ -567,9 +570,7 @@ contract NFTMarketplace is
 
     /// @notice Retrieve payed secondary sales fees.
     function transferSalesFees() public virtual onlyOwner {
-        (bool success, ) = payable(owner()).call{value: address(this).balance}(
-            ""
-        );
+        (bool success, ) = owner().call{value: address(this).balance}("");
         require(success, "Transfer failed.");
     }
 }
