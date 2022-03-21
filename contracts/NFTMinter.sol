@@ -71,7 +71,7 @@ contract NFTMinter is
             );
         }
         require(
-            _tokenIds.current() < MAX_SUPPLY,
+            totalSupply() + 1 < MAX_SUPPLY,
             "Maximum supply of tokens already minted."
         );
         uint256 newItemId = _tokenIds.current();
