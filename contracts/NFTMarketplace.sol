@@ -294,6 +294,7 @@ contract NFTMarketplace is
         // Edit this line to change the maximum fee.
         require(_fee < 51, "Can't set fee higher than 50.00%");
         _NFTContractToFee[_NFTContract] = _fee;
+        assert(_NFTContractToFee[_NFTContract] < 50);
     }
 
     /// @notice Returns the secondary sales fee for the specified NFT collection.
@@ -318,6 +319,7 @@ contract NFTMarketplace is
         );
         require(_floorPrice > 0, "Floor price must be at least 1 wei");
         _NFTContractToFloorPrice[_NFTContract] = _floorPrice;
+        assert(_NFTContractToFloorPrice[_NFTContract] > 0);
     }
 
     /// @notice Returns the floor price for the specified NFT collection
@@ -385,6 +387,8 @@ contract NFTMarketplace is
         _activeItemsCount.increment();
 
         _sellerToListedItemsCount[_msgSender()].increment();
+        assert(IERC721(_NFTContract).ownerOf(_tokenId) == address(this));
+        assert(_nftIDToMarketItem[nftID].seller == _msgSender());
     }
 
     /// @notice Cancels a listing.
@@ -422,7 +426,10 @@ contract NFTMarketplace is
             contractAddress,
             _nftIDToMarketItem[nftID].seller
         );
-
+        assert(
+            IERC721(contractAddress).ownerOf(_tokenId) ==
+                _nftIDToMarketItem[nftID].seller
+        );
         _destroyMarketItem(_msgSender(), nftID);
     }
 
@@ -457,9 +464,15 @@ contract NFTMarketplace is
             _NFTContract != address(0),
             "Contract address can't be address(0)"
         );
-        uint256 floorPrice = _NFTContractToFloorPrice[_NFTContract];
-        require(floorPrice > 0, "Price must be at least 1 wei");
-        require(msg.value == floorPrice, "Asking price must be == floorPrice");
+        require(_to != address(0), "Receiver can't be address(0)");
+        require(
+            _NFTContractToFloorPrice[_NFTContract] > 0,
+            "Floor price must be at least 1 wei"
+        );
+        require(
+            msg.value == _NFTContractToFloorPrice[_NFTContract],
+            "Asking price must be == floorPrice"
+        );
 
         _itemIDs.increment();
 
@@ -469,17 +482,20 @@ contract NFTMarketplace is
         emit MarketItemSold(
             _itemIDs.current(),
             _tokenId,
-            floorPrice,
+            _NFTContractToFloorPrice[_NFTContract],
             _NFTContract,
             _msgSender(),
             _to
         );
 
+        uint256 balance = address(this).balance;
         // This is used instead of transfer or send because of raising gas costs in ethereum blockchain
         // @link https://ethereum.stackexchange.com/questions/78124/is-transfer-still-safe-after-the-istanbul-update
         // for other blockchains the use of transfer or send might be ok.
         (bool success, ) = _msgSender().call{value: msg.value}("");
         require(success, "Transfer failed.");
+        assert(address(this).balance == balance - msg.value);
+        assert(IERC721(_NFTContract).ownerOf(_tokenId) == _to);
     }
 
     /// @notice Buy a listed in marketplace item.
@@ -493,45 +509,43 @@ contract NFTMarketplace is
         onlyNotSeller(_NFTContract, _tokenId)
     {
         uint256 nftID = makeNftID(_NFTContract, _tokenId);
-        uint256 price = _nftIDToMarketItem[nftID].price;
-        uint32 tokenId = unpackMarketItemTokenId(
-            _nftIDToMarketItem[nftID].packedData
-        );
-        uint32 itemId = unpackMarketItemItemId(
-            _nftIDToMarketItem[nftID].packedData
-        );
-        address contractAddress = unpackMarketItemContract(
-            _nftIDToMarketItem[nftID].packedData
-        );
-        address seller = _nftIDToMarketItem[nftID].seller;
 
-        require(msg.value == price, "msg.value is not == Asking price");
+        require(
+            msg.value == _nftIDToMarketItem[nftID].price,
+            "msg.value is not == Asking price"
+        );
 
         // Payment & fee calculation
         uint256 paymentToSeller = msg.value -
-            mulDiv(getFee(contractAddress), msg.value, 100);
+            mulDiv(getFee(_NFTContract), msg.value, 100);
 
         // NFT transfer
-        IERC721(contractAddress).safeTransferFrom(
+        IERC721(_NFTContract).safeTransferFrom(
             address(this),
             _msgSender(),
-            tokenId
+            _tokenId
         );
 
         emit MarketItemSold(
-            itemId,
-            tokenId,
-            price,
-            contractAddress,
-            seller,
+            unpackMarketItemItemId(_nftIDToMarketItem[nftID].packedData),
+            _tokenId,
+            _nftIDToMarketItem[nftID].price,
+            _NFTContract,
+            _nftIDToMarketItem[nftID].seller,
             _msgSender()
         );
 
-        _destroyMarketItem(seller, nftID);
-
+        uint256 balance = address(this).balance;
         // Send payment to seller. Secondary selling fee stays in contract to avoid multiple transfers in one function.
-        (bool success, ) = seller.call{value: paymentToSeller}("");
+        (bool success, ) = _nftIDToMarketItem[nftID].seller.call{
+            value: paymentToSeller
+        }("");
         require(success, "Transfer failed.");
+
+        _destroyMarketItem(_nftIDToMarketItem[nftID].seller, nftID);
+
+        assert(address(this).balance == balance - paymentToSeller);
+        assert(IERC721(_NFTContract).ownerOf(_tokenId) == _msgSender());
     }
 
     /// @notice Returns items listed in the marketplace.
@@ -572,5 +586,6 @@ contract NFTMarketplace is
     function transferSalesFees() public virtual onlyOwner {
         (bool success, ) = owner().call{value: address(this).balance}("");
         require(success, "Transfer failed.");
+        assert(address(this).balance == 0);
     }
 }
