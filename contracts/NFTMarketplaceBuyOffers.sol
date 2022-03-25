@@ -21,7 +21,7 @@ import "./Helpers.sol";
 /// Only bidder is enabled to cancel an offer. Offers don't limit the owner in any case.
 /// Buy offers should dissappear from front end in case the owner inits an auction.
 /// Is not possible to place a Buy offer for auction items.
-contract NFTMarketplaceBuyOffer is
+contract NFTMarketplaceBuyOffers is
     ReentrancyGuard,
     Ownable,
     ERC721Holder,
@@ -98,7 +98,7 @@ contract NFTMarketplaceBuyOffer is
         uint256 indexOfIdToBid = _userNftIdToBids[_msgSender()][nftId];
         require(
             _idToBid[indexOfIdToBid] == 0,
-            "Offer for this listing already exists"
+            "You already have an active offer for this item"
         );
 
         _addBuyOffer(_msgSender(), nftId, msg.value);
@@ -123,7 +123,7 @@ contract NFTMarketplaceBuyOffer is
         uint256 nftId = _makeNftId(contractAddress_, tokenId_);
         uint256 indexOfIdToBid = _userNftIdToBids[_msgSender()][nftId];
         uint256 bid = _idToBid[indexOfIdToBid];
-        require(bid > 0, "No active offer found.");
+        require(bid > 0, "No active offer found");
 
         _destroyBuyOffer(_msgSender(), nftId, indexOfIdToBid);
 
@@ -154,7 +154,7 @@ contract NFTMarketplaceBuyOffer is
         uint256 nftId = _makeNftId(contractAddress_, tokenId_);
         uint256 indexOfIdToBid = _userNftIdToBids[bidder_][nftId];
         uint256 bid = _idToBid[indexOfIdToBid];
-        require(bid > 0, "No active offer found.");
+        require(bid > 0, "No active offer found");
 
         emit BuyOfferStatus(bidder_, contractAddress_, tokenId_, bid, true);
 
