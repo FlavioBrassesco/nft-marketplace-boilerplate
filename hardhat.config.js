@@ -1,6 +1,7 @@
 require("@nomiclabs/hardhat-waffle");
 require("dotenv").config();
 require("@nomiclabs/hardhat-etherscan");
+require("hardhat-contract-sizer");
 
 const privateKey = process.env.PRIVATE_KEY;
 const maticUrl = process.env.MATIC_APP_ID;
@@ -20,12 +21,11 @@ module.exports = {
   },
   networks: {
     ganache: {
-      from: "0xd94C02d5aeFE85C1878Dc632f5Ee02aaf4341d1c",
+      from: from,
       chainId: 1337,
       url: "HTTP://127.0.0.1:7545",
       accounts: {
-        mnemonic:
-          "excite field online wine obtain vital elegant main text awkward age slide",
+        mnemonic: mnemonic,
       },
     },
     matic: {

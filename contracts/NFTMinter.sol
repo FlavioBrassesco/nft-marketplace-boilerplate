@@ -21,20 +21,34 @@ contract NFTMinter is
     using Counters for Counters.Counter;
     Counters.Counter private _tokenIds;
 
-    uint256 internal constant MAX_SUPPLY = 10000;
-    uint256 internal constant FLOOR_PRICE = 0.001 ether;
+    uint256 internal MAX_SUPPLY;
+    uint256 internal _floorPrice;
+    string internal CONTRACT_URI;
+    string internal BASE_URI;
 
-    constructor(string memory _name, string memory _symbol)
-        ERC721(_name, _symbol)
-    {
+    constructor(
+        string memory _name,
+        string memory _symbol,
+        string memory _contractURI,
+        string memory baseURI_,
+        uint256 _maxSupply,
+        uint256 floorPrice_
+    ) ERC721(_name, _symbol) {
         _initializeEIP712(_name);
+        CONTRACT_URI = _contractURI;
+        BASE_URI = baseURI_;
+        MAX_SUPPLY = _maxSupply;
+        _floorPrice = floorPrice_;
     }
 
     /// @notice get metadata URI for opensea collection.
     /// @dev be sure to replace return string to correct URI
-    function contractURI() public pure returns (string memory) {
-        return
-            "https://ipfs.io/ipfs/Qmbph4yScYn5xbCk2dvfHThpEfH2L2JBhng5xEWgxNLiYp/collection-1/collection.json";
+    function contractURI() public view returns (string memory) {
+        return CONTRACT_URI;
+    }
+
+    function _baseURI() internal view override(ERC721) returns (string memory) {
+        return BASE_URI;
     }
 
     // This is used instead of msg.sender so transactions could be sent by the original token owner and by OpenSea.
@@ -66,12 +80,12 @@ contract NFTMinter is
     {
         if (msgSender() != owner()) {
             require(
-                msg.value == FLOOR_PRICE,
+                msg.value == _floorPrice,
                 "Value sent should be equal to floor price"
             );
         }
         require(
-            totalSupply() + 1 < MAX_SUPPLY,
+            totalSupply() < MAX_SUPPLY,
             "Maximum supply of tokens already minted."
         );
         uint256 newItemId = _tokenIds.current();
@@ -79,5 +93,14 @@ contract NFTMinter is
         _mint(_to, newItemId);
         _setTokenURI(newItemId, _tokenURI);
         return newItemId;
+    }
+
+    function _transfer(
+        address from,
+        address to,
+        uint256 tokenId
+    ) internal virtual override {
+        ERC721._transfer(from, to, tokenId);
+        assert(ERC721.ownerOf(tokenId) == to);
     }
 }

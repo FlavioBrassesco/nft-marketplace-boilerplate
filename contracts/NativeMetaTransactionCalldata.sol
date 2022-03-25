@@ -2,6 +2,7 @@
 pragma solidity ^0.8.0;
 
 import "./EIP712Base.sol";
+import "./Helpers.sol";
 
 /**
  * Based on:
@@ -82,7 +83,7 @@ contract NativeMetaTransactionCalldata is EIP712Base {
         (bool success, bytes memory returnData) = address(this).call{
             value: msg.value
         }(abi.encodePacked(functionSignature, callData, userAddress));
-        require(success, "Function call not successful");
+        require(success, Helpers._getRevertMsg(returnData));
 
         return returnData;
     }
