@@ -234,15 +234,15 @@ contract NFTMarketplaceAuctions is
         onlyAuctionInProgress(contractAddress_, tokenId_)
     {
         uint256 nftId = _makeNftId(contractAddress_, tokenId_);
-        if (_nftIdToAuctionItem[nftId].currentBidder != address(0)) {
-            require(
-                msg.value > _nftIdToAuctionItem[nftId].currentBid,
-                "Your bid must be higher than last bid"
-            );
-        } else {
+        if (_nftIdToAuctionItem[nftId].currentBidder == address(0)) {
             require(
                 msg.value >= _nftIdToAuctionItem[nftId].currentBid,
                 "Your bid must be equal or higher than floor price"
+            );
+        } else {
+            require(
+                msg.value > _nftIdToAuctionItem[nftId].currentBid,
+                "Your bid must be higher than last bid"
             );
         }
         _addAuctionBid(contractAddress_, tokenId_, _msgSender(), msg.value);
@@ -477,7 +477,7 @@ contract NFTMarketplaceAuctions is
         require(
             _nftIdToAuctionItem[_makeNftId(contractAddress_, tokenId_)]
                 .seller == _msgSender(),
-            "Seller is not authorized"
+            "Only seller authorized"
         );
         _;
     }

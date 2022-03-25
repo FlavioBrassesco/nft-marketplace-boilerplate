@@ -787,6 +787,12 @@ describe("NFTMarketplace", () => {
   });
 
   describe("transferSalesFees", () => {
+    it("Should revert if transferSalesFees is not called by owner", async () => {
+      const [, addr1] = await ethers.getSigners();
+      await expect(
+        nftmarketplace.connect(addr1).transferSalesFees()
+      ).to.be.revertedWith("Ownable: caller is not the owner");
+    });
     it("Should pass if sales fees are ok and get successfully transferred to owner", async () => {
       const [owner, addr1, addr2] = await ethers.getSigners();
 

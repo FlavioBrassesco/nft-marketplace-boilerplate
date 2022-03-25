@@ -53,8 +53,22 @@ const deployMarketplaceAuctions = async (name, nftmanagerAddress, maxDays) => {
   return nftmarketplace;
 };
 
+const deployMarketplaceBuyOffers = async (name, nftmanagerAddress, maxDays) => {
+  const NFTMarketplace = await ethers.getContractFactory(
+    "NFTMarketplaceBuyOffers"
+  );
+  const nftmarketplace = await NFTMarketplace.deploy(
+    name,
+    nftmanagerAddress,
+    maxDays
+  );
+  await nftmarketplace.deployed();
+  return nftmarketplace;
+};
+
 module.exports.deployMinter = deployMinter;
 module.exports.deployManager = deployManager;
 module.exports.deployMarketplace = deployMarketplace;
 module.exports.deployMarketplaceAuctions = deployMarketplaceAuctions;
+module.exports.deployMarketplaceBuyOffers = deployMarketplaceBuyOffers;
 module.exports.mint = mint;
