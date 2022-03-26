@@ -40,6 +40,18 @@ describe("NFTMarketplace", () => {
   });
 
   describe("createMarketItem", () => {
+    it("Should revert if panic switch true", async () => {
+      const [, addr1] = await ethers.getSigners();
+
+      const txPanic = await nftmarketplace.setPanicSwitch(true);
+      txPanic.wait();
+
+      await expect(
+        nftmarketplace
+          .connect(addr1)
+          .createMarketItem(nftminter.address, 0, 10000)
+      ).to.be.revertedWith("Something went wrong");
+    });
     it("Should revert if addr1 tries to create an MarketItem for a non whitelisted contract", async () => {
       const [, addr1] = await ethers.getSigners();
       await mint(nftminter, addr1.address, 1);
@@ -205,6 +217,18 @@ describe("NFTMarketplace", () => {
   });
 
   describe("createMarketSale", () => {
+    it("Should revert if panic switch true", async () => {
+      const [, addr1] = await ethers.getSigners();
+
+      const txPanic = await nftmarketplace.setPanicSwitch(true);
+      txPanic.wait();
+
+      await expect(
+        nftmarketplace
+          .connect(addr1)
+          .createMarketSale(nftminter.address, 0, { value: 10000 })
+      ).to.be.revertedWith("Something went wrong");
+    });
     it("Should revert if addr2 tries to buy a MarketItem that is not for sale", async () => {
       const [, addr1, addr2] = await ethers.getSigners();
 
@@ -385,6 +409,23 @@ describe("NFTMarketplace", () => {
   });
 
   describe("createMarketOwnerSale", () => {
+    it("Should revert if panic switch true", async () => {
+      const [, addr1] = await ethers.getSigners();
+
+      const txPanic = await nftmarketplace.setPanicSwitch(true);
+      txPanic.wait();
+
+      await expect(
+        nftmarketplace.createMarketOwnerSale(
+          addr1.address,
+          nftminter.address,
+          0,
+          {
+            value: 10000,
+          }
+        )
+      ).to.be.revertedWith("Something went wrong");
+    });
     it("Should pass if addr2 tries to sign for addr1 to buy an item through createOwnerSale MetaTransaction", async () => {
       const [, addr1, addr2] = await ethers.getSigners();
 
@@ -855,7 +896,7 @@ describe("NFTMarketplace", () => {
     });
   });
 
-  describe.only("MarketItem Enumeration", () => {
+  describe("MarketItem Enumeration", () => {
     it("Should pass if enumeration of all MarketItems for addr1 is ok", async () => {
       const [, addr1] = await ethers.getSigners();
       const qty = 3;
@@ -895,7 +936,7 @@ describe("NFTMarketplace", () => {
         expect(it.price).to.equal(price + i);
       });
     });
-    it.only("Should pass if enumeration of all MarketItems is ok", async () => {
+    it("Should pass if enumeration of all MarketItems is ok", async () => {
       const [, addr1, addr2] = await ethers.getSigners();
       const qty = 2;
       await mint(nftminter, addr1.address, qty);

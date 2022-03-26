@@ -91,9 +91,9 @@ contract NFTMarketplace is
     )
         public
         payable
+        onlyNotPanic
         nonReentrant
         onlyWhitelistedContract(contractAddress_)
-        onlyNotPanic
     {
         require(price_ > 0, "Price must be at least 1 wei");
 
@@ -148,10 +148,10 @@ contract NFTMarketplace is
     function createMarketSale(address contractAddress_, uint32 tokenId_)
         public
         payable
+        onlyNotPanic
         nonReentrant
         onlyForSale(contractAddress_, tokenId_)
         onlyNotSeller(contractAddress_, tokenId_)
-        onlyNotPanic
     {
         uint256 nftId = _makeNftId(contractAddress_, tokenId_);
 
@@ -205,8 +205,8 @@ contract NFTMarketplace is
         public
         payable
         virtual
-        onlyOwner
         onlyNotPanic
+        onlyOwner
         nonReentrant
         onlyWhitelistedContract(contractAddress_)
     {
@@ -263,7 +263,7 @@ contract NFTMarketplace is
     }
 
     /// @notice set Panic Switch status.
-    function setPanicStatus(bool status_) public onlyOwner {
+    function setPanicSwitch(bool status_) public onlyOwner {
         _panicSwitch = status_;
     }
 

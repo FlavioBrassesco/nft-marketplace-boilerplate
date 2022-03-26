@@ -96,6 +96,10 @@ contract NFTMarketplaceAuctions is
         return _name;
     }
 
+    function setPanicSwitch(bool status_) public onlyOwner {
+        _panicSwitch = status_;
+    }
+
     /// @notice Starts an Auction for a given NFT
     /// @param floorPrice_ Floor price in wei
     /// @param days_ Duration in days. 1 to MAX_DAYS inclusive
@@ -229,6 +233,7 @@ contract NFTMarketplaceAuctions is
         public
         payable
         nonReentrant
+        onlyNotPanic
         onlyNotSeller(contractAddress_, tokenId_)
         onlyNotCurrentBidder(contractAddress_, tokenId_)
         onlyAuctionInProgress(contractAddress_, tokenId_)

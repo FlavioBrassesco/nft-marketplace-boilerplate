@@ -9,7 +9,7 @@ contract NFTMarketplaceHelpers {
     /// @param tokenId_ The ID of the token
     /// @return uint256 unique NFT ID.
     function _makeNftId(address contractAddress_, uint32 tokenId_)
-        internal
+        public
         pure
         returns (uint256)
     {

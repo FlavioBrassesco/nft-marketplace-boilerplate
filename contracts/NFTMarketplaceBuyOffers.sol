@@ -33,9 +33,12 @@ contract NFTMarketplaceBuyOffers is
 
     mapping(uint256 => uint256) internal _idToBid;
     mapping(uint256 => uint256) internal _idToNftId;
+    mapping(uint256 => address) internal _idToUser;
     Counters.Counter internal _allBidsCount;
 
+    // save bids as index of _idToBid
     mapping(address => mapping(uint256 => uint256)) internal _userBids;
+    // save index of _userBids as index of _idToBid
     mapping(address => mapping(uint256 => uint256)) _userBidsIndex;
     mapping(address => Counters.Counter) internal _userBidsCount;
 
@@ -83,6 +86,10 @@ contract NFTMarketplaceBuyOffers is
         return _name;
     }
 
+    function setPanicSwitch(bool status_) public onlyOwner {
+        _panicSwitch = status_;
+    }
+
     /// @notice Create a Buy Offer for an NFT
     /// @param contractAddress_ address of the NFT Collection
     /// @param tokenId_ ID of the token
@@ -91,15 +98,20 @@ contract NFTMarketplaceBuyOffers is
     function createBuyOffer(address contractAddress_, uint32 tokenId_)
         public
         payable
+        onlyNotPanic
+        onlyWhitelistedContract(contractAddress_)
     {
         require(msg.value > 0, "Price must be at least 1 wei");
 
         uint256 nftId = _makeNftId(contractAddress_, tokenId_);
         uint256 indexOfIdToBid = _userNftIdToBids[_msgSender()][nftId];
-        require(
-            _idToBid[indexOfIdToBid] == 0,
-            "You already have an active offer for this item"
-        );
+
+        if (_idToUser[indexOfIdToBid] == _msgSender()) {
+            require(
+                _idToNftId[indexOfIdToBid] != nftId,
+                "You already have an offer for this item"
+            );
+        }
 
         _addBuyOffer(_msgSender(), nftId, msg.value);
 
@@ -124,6 +136,12 @@ contract NFTMarketplaceBuyOffers is
         uint256 indexOfIdToBid = _userNftIdToBids[_msgSender()][nftId];
         uint256 bid = _idToBid[indexOfIdToBid];
         require(bid > 0, "No active offer found");
+        if (_idToUser[indexOfIdToBid] == _msgSender()) {
+            require(
+                _idToNftId[indexOfIdToBid] == nftId,
+                "No active offer found"
+            );
+        }
 
         _destroyBuyOffer(_msgSender(), nftId, indexOfIdToBid);
 
@@ -155,6 +173,12 @@ contract NFTMarketplaceBuyOffers is
         uint256 indexOfIdToBid = _userNftIdToBids[bidder_][nftId];
         uint256 bid = _idToBid[indexOfIdToBid];
         require(bid > 0, "No active offer found");
+        if (_idToUser[indexOfIdToBid] == bidder_) {
+            require(
+                _idToNftId[indexOfIdToBid] == nftId,
+                "No active offer found"
+            );
+        }
 
         emit BuyOfferStatus(bidder_, contractAddress_, tokenId_, bid, true);
 
@@ -241,7 +265,9 @@ contract NFTMarketplaceBuyOffers is
     ) internal {
         _idToBid[_allBidsCount.current()] = bid_;
         _idToNftId[_allBidsCount.current()] = nftId_;
+        _idToUser[_allBidsCount.current()] = user_;
 
+        _userNftIdToBids[user_][nftId_] = _allBidsCount.current();
         _userBids[user_][_userBidsCount[user_].current()] = _allBidsCount
             .current();
         _nftIdBids[nftId_][_nftIdBidsCount[nftId_].current()] = _allBidsCount
@@ -271,9 +297,12 @@ contract NFTMarketplaceBuyOffers is
             _idToBid[indexOfIdToBid_] = lastBid;
             uint256 lastNftId = _idToNftId[_allBidsCount.current() - 1];
             _idToNftId[indexOfIdToBid_] = lastNftId;
+            address lastUser = _idToUser[_allBidsCount.current() - 1];
+            _idToUser[indexOfIdToBid_] = lastUser;
         }
         delete _idToBid[_allBidsCount.current() - 1];
         delete _idToNftId[_allBidsCount.current() - 1];
+        delete _idToUser[_allBidsCount.current() - 1];
         _allBidsCount.decrement();
 
         if (indexOfUserBids != _userBidsCount[user_].current() - 1) {
@@ -293,6 +322,8 @@ contract NFTMarketplaceBuyOffers is
         }
         delete _nftIdBids[nftId_][_nftIdBidsCount[nftId_].current() - 1];
         _nftIdBidsCount[nftId_].decrement();
+
+        delete _userNftIdToBids[user_][nftId_];
     }
 
     function _msgSender() internal view override returns (address) {

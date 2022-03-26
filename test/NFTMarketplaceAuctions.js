@@ -36,8 +36,19 @@ describe("NFTMarketplaceAuctions", () => {
   });
 
   describe("createMarketAuction", () => {
+    it("Should revert if panic switch true", async () => {
+      const [, addr1] = await ethers.getSigners();
+
+      const txPanic = await nftmarketplace.setPanicSwitch(true);
+      txPanic.wait();
+
+      await expect(
+        nftmarketplace
+          .connect(addr1)
+          .createMarketAuction(nftminter.address, 0, 100000, 1)
+      ).to.be.revertedWith("Something went wrong");
+    });
     it("Should revert if addr1 tries to create an AuctionItem for a non whitelisted contract", async () => {
-      // arrange
       const [, addr1] = await ethers.getSigners();
       await mint(nftminter, addr1.address, 1);
 
@@ -54,7 +65,6 @@ describe("NFTMarketplaceAuctions", () => {
     });
 
     it("Should revert if addr1 tries to create an AuctionItem with floor price 0", async () => {
-      // arrange
       const [, addr1] = await ethers.getSigners();
       await mint(nftminter, addr1.address, 1);
 
@@ -77,7 +87,6 @@ describe("NFTMarketplaceAuctions", () => {
     });
 
     it("Should revert if addr1 tries to create an AuctionItem with days out of bounds", async () => {
-      // arrange
       const [, addr1] = await ethers.getSigners();
       await mint(nftminter, addr1.address, 1);
 
@@ -149,6 +158,18 @@ describe("NFTMarketplaceAuctions", () => {
     });
   });
   describe("createAuctionBid", () => {
+    it("Should revert if panic switch true", async () => {
+      const [, addr1] = await ethers.getSigners();
+
+      const txPanic = await nftmarketplace.setPanicSwitch(true);
+      txPanic.wait();
+
+      await expect(
+        nftmarketplace
+          .connect(addr1)
+          .createAuctionBid(nftminter.address, 0, { value: 1000 })
+      ).to.be.revertedWith("Something went wrong");
+    });
     it("Should revert if addr1 tries to create a bid for its own item", async () => {
       const [, addr1] = await ethers.getSigners();
       await mint(nftminter, addr1.address, 1);
@@ -175,7 +196,7 @@ describe("NFTMarketplaceAuctions", () => {
         nftmarketplace
           .connect(addr1)
           .createAuctionBid(nftminter.address, 0, options)
-      ).to.be.revertedWith("Seller is not authorized");
+      ).to.be.revertedWith("Only seller authorized");
     });
     it("Should revert if addr2 tries to create a second bid for addr1 item", async () => {
       const [, addr1, addr2] = await ethers.getSigners();
@@ -572,7 +593,6 @@ describe("NFTMarketplaceAuctions", () => {
       ).to.be.revertedWith("Auction must be finished to perform this action");
     });
     it("Should pass if addr2 successfully retrieves an auction item", async () => {
-      // arrange
       const [, addr1, addr2] = await ethers.getSigners();
       await mint(nftminter, addr1.address, 1);
 
@@ -612,6 +632,21 @@ describe("NFTMarketplaceAuctions", () => {
     });
   });
   describe("createMarketOwnerAuction meta transactions", () => {
+    it("Should revert if panic switch true", async () => {
+      const [, addr1] = await ethers.getSigners();
+
+      const txPanic = await nftmarketplace.setPanicSwitch(true);
+      txPanic.wait();
+      // not metatx but ok for test
+      await expect(
+        nftmarketplace.createMarketOwnerAuction(
+          addr1.address,
+          nftminter.address,
+          0,
+          { value: 1000 }
+        )
+      ).to.be.revertedWith("Something went wrong");
+    });
     it("Should revert if addr1 tries to createMarketOwnerAuction signed by addr2", async () => {
       const [, addr1, addr2] = await ethers.getSigners();
       await mint(nftminter, addr2.address, 1);
@@ -767,7 +802,7 @@ describe("NFTMarketplaceAuctions", () => {
             ),
             options
           )
-      ).to.be.revertedWith("Contrat is not allowed");
+      ).to.be.revertedWith("Contract is not auctionable");
     });
     it("Should revert if addr1 tries to createMarketOwnerAuction for a contract with no floor price", async () => {
       const [owner, addr1] = await ethers.getSigners();
