@@ -14,6 +14,7 @@
     "hardhat:matic": "hardhat run --network matic scripts/deploy.js",
     "hardhat:bsctestnet": "hardhat run --network bsctestnet scripts/deploy.js",
     "hardhat:bsc": "hardhat run --network bsc scripts/deploy.js",
+    "hardhat:test": "hardhat test --network ganache",
     "mint:mumbai": "hardhat run --network mumbai scripts/mint.js",
     "hardhat:verify": "hardhat verify --network mumbai process.env.VERIFY"
   },

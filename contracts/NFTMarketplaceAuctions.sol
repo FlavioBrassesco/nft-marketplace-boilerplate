@@ -7,7 +7,6 @@ import "@openzeppelin/contracts/security/ReentrancyGuard.sol";
 import "@openzeppelin/contracts/access/Ownable.sol";
 import "@openzeppelin/contracts/token/ERC721/utils/ERC721Holder.sol";
 import "./ContextMixin.sol";
-import "./NFTMarketplaceHelpers.sol";
 import "./Helpers.sol";
 import "./NativeMetaTransactionCalldata.sol";
 import "./NFTMarketplaceContractManager.sol";
@@ -25,7 +24,7 @@ contract NFTMarketplaceAuctions is
     ERC721Holder,
     ContextMixin,
     NativeMetaTransactionCalldata,
-    NFTMarketplaceHelpers
+    NFTMarketplaceContractManager
 {
     using Counters for Counters.Counter;
 
@@ -78,16 +77,10 @@ contract NFTMarketplaceAuctions is
     );
 
     string internal _name;
-    address internal _contractManager;
 
-    constructor(
-        string memory name_,
-        address contractManager_,
-        uint256 maxDays_
-    ) {
+    constructor(string memory name_, uint256 maxDays_) {
         _pendingFunds = 0;
         _name = name_;
-        _contractManager = contractManager_;
         MAX_DAYS = maxDays_;
         _initializeEIP712(name_);
     }
@@ -117,7 +110,7 @@ contract NFTMarketplaceAuctions is
         require(floorPrice_ > 0, "Floor price must be at least 1 wei");
         require(days_ >= 1 && days_ <= MAX_DAYS, "Duration out of bounds");
 
-        uint256 nftId = _makeNftId(contractAddress_, tokenId_);
+        uint256 nftId = Helpers.makeNftId(contractAddress_, tokenId_);
 
         _addAuctionItem(_msgSender(), nftId, floorPrice_, days_);
 
@@ -198,15 +191,14 @@ contract NFTMarketplaceAuctions is
         nonReentrant
         onlyWhitelistedContract(contractAddress_)
     {
-        uint256 floorPrice = NFTMarketplaceContractManager(_contractManager)
-            .getFloorPrice(contractAddress_);
+        uint256 floorPrice = getFloorPrice(contractAddress_);
         require(floorPrice > 0, "Floor price must be greater than 0");
         require(
             msg.value >= floorPrice,
             "Value sent must be greater than floor price"
         );
 
-        uint256 nftId = _makeNftId(contractAddress_, tokenId_);
+        uint256 nftId = Helpers.makeNftId(contractAddress_, tokenId_);
 
         _addAuctionItem(msgSender(), nftId, floorPrice, MAX_DAYS);
 
@@ -238,7 +230,7 @@ contract NFTMarketplaceAuctions is
         onlyNotCurrentBidder(contractAddress_, tokenId_)
         onlyAuctionInProgress(contractAddress_, tokenId_)
     {
-        uint256 nftId = _makeNftId(contractAddress_, tokenId_);
+        uint256 nftId = Helpers.makeNftId(contractAddress_, tokenId_);
         if (_nftIdToAuctionItem[nftId].currentBidder == address(0)) {
             require(
                 msg.value >= _nftIdToAuctionItem[nftId].currentBid,
@@ -259,7 +251,7 @@ contract NFTMarketplaceAuctions is
         address bidder_,
         uint256 bid_
     ) internal {
-        uint256 nftId = _makeNftId(contractAddress_, tokenId_);
+        uint256 nftId = Helpers.makeNftId(contractAddress_, tokenId_);
 
         // saving information to make external call after state change
         address previousBidder = _nftIdToAuctionItem[nftId].currentBidder;
@@ -289,7 +281,7 @@ contract NFTMarketplaceAuctions is
         if (previousBidder != address(0)) {
             _pendingFunds -= previousBid;
 
-            _safeTransferValue(previousBidder, previousBid);
+            Address.sendValue(payable(previousBidder), previousBid);
         }
     }
 
@@ -315,7 +307,7 @@ contract NFTMarketplaceAuctions is
     function transferSalesFees() public onlyOwner nonReentrant {
         uint256 salesFees = address(this).balance - _pendingFunds;
         require(salesFees > 0, "No sales fees to retrieve");
-        _safeTransferValue(owner(), salesFees);
+        Address.sendValue(payable(owner()), salesFees);
     }
 
     function itemOfUserByIndex(address user_, uint256 index_)
@@ -356,7 +348,7 @@ contract NFTMarketplaceAuctions is
         private
         onlyAfterEnd(contractAddress_, tokenId_)
     {
-        uint256 nftId = _makeNftId(contractAddress_, tokenId_);
+        uint256 nftId = Helpers.makeNftId(contractAddress_, tokenId_);
 
         // saving information to make external calls after state change
         address seller = _nftIdToAuctionItem[nftId].seller;
@@ -393,15 +385,9 @@ contract NFTMarketplaceAuctions is
 
             // Payment & fee calculation
             uint256 paymentToSeller = currentBid -
-                Helpers._mulDiv(
-                    NFTMarketplaceContractManager(_contractManager).getFee(
-                        contractAddress_
-                    ),
-                    currentBid,
-                    100
-                );
+                Helpers._mulDiv(getFee(contractAddress_), currentBid, 100);
 
-            _safeTransferValue(seller, paymentToSeller);
+            Address.sendValue(payable(seller), paymentToSeller);
         }
     }
 
@@ -412,8 +398,9 @@ contract NFTMarketplaceAuctions is
     modifier onlyCurrentBidder(address contractAddress_, uint32 tokenId_) {
         require(
             _msgSender() ==
-                _nftIdToAuctionItem[_makeNftId(contractAddress_, tokenId_)]
-                    .currentBidder,
+                _nftIdToAuctionItem[
+                    Helpers.makeNftId(contractAddress_, tokenId_)
+                ].currentBidder,
             "Sender is not current bidder"
         );
         _;
@@ -422,8 +409,9 @@ contract NFTMarketplaceAuctions is
     modifier onlyNotCurrentBidder(address contractAddress_, uint32 tokenId_) {
         require(
             _msgSender() !=
-                _nftIdToAuctionItem[_makeNftId(contractAddress_, tokenId_)]
-                    .currentBidder,
+                _nftIdToAuctionItem[
+                    Helpers.makeNftId(contractAddress_, tokenId_)
+                ].currentBidder,
             "Current bidder can't perform this action"
         );
         _;
@@ -431,11 +419,13 @@ contract NFTMarketplaceAuctions is
 
     modifier onlyAuctionInProgress(address contractAddress_, uint32 tokenId_) {
         require(
-            _nftIdToAuctionItem[_makeNftId(contractAddress_, tokenId_)].endsAt >
+            _nftIdToAuctionItem[Helpers.makeNftId(contractAddress_, tokenId_)]
+                .endsAt >
                 0 &&
                 block.timestamp <
-                _nftIdToAuctionItem[_makeNftId(contractAddress_, tokenId_)]
-                    .endsAt,
+                _nftIdToAuctionItem[
+                    Helpers.makeNftId(contractAddress_, tokenId_)
+                ].endsAt,
             "Auction has not started or it's already finished"
         );
         _;
@@ -443,23 +433,15 @@ contract NFTMarketplaceAuctions is
 
     modifier onlyAfterEnd(address contractAddress_, uint32 tokenId_) {
         require(
-            _nftIdToAuctionItem[_makeNftId(contractAddress_, tokenId_)].endsAt >
-                0
+            _nftIdToAuctionItem[Helpers.makeNftId(contractAddress_, tokenId_)]
+                .endsAt > 0
         );
         require(
             block.timestamp >
-                _nftIdToAuctionItem[_makeNftId(contractAddress_, tokenId_)]
-                    .endsAt,
+                _nftIdToAuctionItem[
+                    Helpers.makeNftId(contractAddress_, tokenId_)
+                ].endsAt,
             "Auction must be finished to perform this action"
-        );
-        _;
-    }
-
-    modifier onlyWhitelistedContract(address contractAddress_) {
-        require(
-            NFTMarketplaceContractManager(_contractManager)
-                .isWhitelistedNFTContract(contractAddress_),
-            "Contract is not auctionable"
         );
         _;
     }
@@ -471,7 +453,7 @@ contract NFTMarketplaceAuctions is
 
     modifier onlyNotSeller(address contractAddress_, uint32 tokenId_) {
         require(
-            _nftIdToAuctionItem[_makeNftId(contractAddress_, tokenId_)]
+            _nftIdToAuctionItem[Helpers.makeNftId(contractAddress_, tokenId_)]
                 .seller != _msgSender(),
             "Seller is not authorized"
         );
@@ -480,7 +462,7 @@ contract NFTMarketplaceAuctions is
 
     modifier onlySeller(address contractAddress_, uint32 tokenId_) {
         require(
-            _nftIdToAuctionItem[_makeNftId(contractAddress_, tokenId_)]
+            _nftIdToAuctionItem[Helpers.makeNftId(contractAddress_, tokenId_)]
                 .seller == _msgSender(),
             "Only seller authorized"
         );

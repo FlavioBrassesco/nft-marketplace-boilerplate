@@ -2,7 +2,7 @@
 pragma solidity ^0.8.0;
 
 import "./EIP712Base.sol";
-import "./Helpers.sol";
+import "@openzeppelin/contracts/utils/Address.sol";
 
 /**
  * Based on:
@@ -80,12 +80,12 @@ contract NativeMetaTransactionCalldata is EIP712Base {
         );
 
         // Append userAddress and relayer address at the end to extract it from calling context
-        (bool success, bytes memory returnData) = address(this).call{
-            value: msg.value
-        }(abi.encodePacked(functionSignature, callData, userAddress));
-        require(success, Helpers._getRevertMsg(returnData));
-
-        return returnData;
+        return
+            Address.functionCallWithValue(
+                address(this),
+                abi.encodePacked(functionSignature, callData, userAddress),
+                msg.value
+            );
     }
 
     function hashMetaTransaction(MetaTransaction memory metaTx)

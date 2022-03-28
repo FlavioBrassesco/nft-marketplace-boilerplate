@@ -34,34 +34,26 @@ const deployManager = async () => {
   await nftcontractmanager.deployed();
   return nftcontractmanager;
 };
-const deployMarketplace = async (name, nftmanagerAddress) => {
+const deployMarketplace = async (name) => {
   const NFTMarketplace = await ethers.getContractFactory("NFTMarketplace");
-  const nftmarketplace = await NFTMarketplace.deploy(name, nftmanagerAddress);
+  const nftmarketplace = await NFTMarketplace.deploy(name);
   await nftmarketplace.deployed();
   return nftmarketplace;
 };
-const deployMarketplaceAuctions = async (name, nftmanagerAddress, maxDays) => {
+const deployMarketplaceAuctions = async (name, maxDays) => {
   const NFTMarketplace = await ethers.getContractFactory(
     "NFTMarketplaceAuctions"
   );
-  const nftmarketplace = await NFTMarketplace.deploy(
-    name,
-    nftmanagerAddress,
-    maxDays
-  );
+  const nftmarketplace = await NFTMarketplace.deploy(name, maxDays);
   await nftmarketplace.deployed();
   return nftmarketplace;
 };
 
-const deployMarketplaceBuyOffers = async (name, nftmanagerAddress, maxDays) => {
+const deployMarketplaceBuyOffers = async (name, maxDays) => {
   const NFTMarketplace = await ethers.getContractFactory(
     "NFTMarketplaceBuyOffers"
   );
-  const nftmarketplace = await NFTMarketplace.deploy(
-    name,
-    nftmanagerAddress,
-    maxDays
-  );
+  const nftmarketplace = await NFTMarketplace.deploy(name, maxDays);
   await nftmarketplace.deployed();
   return nftmarketplace;
 };

@@ -9,7 +9,6 @@ import "@openzeppelin/contracts/token/ERC721/utils/ERC721Holder.sol";
 import "./ContextMixin.sol";
 import "./NativeMetaTransactionCalldata.sol";
 import "./NFTMarketplaceContractManager.sol";
-import "./NFTMarketplaceHelpers.sol";
 import "./Helpers.sol";
 
 /// @title NFT Marketplace's Buy Offer Support
@@ -27,7 +26,7 @@ contract NFTMarketplaceBuyOffers is
     ERC721Holder,
     ContextMixin,
     NativeMetaTransactionCalldata,
-    NFTMarketplaceHelpers
+    NFTMarketplaceContractManager
 {
     using Counters for Counters.Counter;
 
@@ -64,20 +63,14 @@ contract NFTMarketplaceBuyOffers is
     );
 
     string internal _name;
-    address internal _contractManager;
     uint256 internal MAX_DAYS;
     uint256 internal _pendingFunds;
     bool internal _panicSwitch;
 
-    constructor(
-        string memory name_,
-        address contractManager_,
-        uint256 maxDays_
-    ) {
+    constructor(string memory name_, uint256 maxDays_) {
         _panicSwitch = false;
         _pendingFunds = 0;
         _name = name_;
-        _contractManager = contractManager_;
         MAX_DAYS = maxDays_;
         _initializeEIP712(name_);
     }
@@ -103,7 +96,7 @@ contract NFTMarketplaceBuyOffers is
     {
         require(msg.value > 0, "Price must be at least 1 wei");
 
-        uint256 nftId = _makeNftId(contractAddress_, tokenId_);
+        uint256 nftId = Helpers.makeNftId(contractAddress_, tokenId_);
         uint256 indexOfIdToBid = _userNftIdToBids[_msgSender()][nftId];
 
         if (_idToUser[indexOfIdToBid] == _msgSender()) {
@@ -132,7 +125,7 @@ contract NFTMarketplaceBuyOffers is
         public
         nonReentrant
     {
-        uint256 nftId = _makeNftId(contractAddress_, tokenId_);
+        uint256 nftId = Helpers.makeNftId(contractAddress_, tokenId_);
         uint256 indexOfIdToBid = _userNftIdToBids[_msgSender()][nftId];
         uint256 bid = _idToBid[indexOfIdToBid];
         require(bid > 0, "No active offer found");
@@ -155,7 +148,7 @@ contract NFTMarketplaceBuyOffers is
             false
         );
 
-        _safeTransferValue(_msgSender(), bid);
+        Address.sendValue(payable(_msgSender()), bid);
     }
 
     /// @notice Accept a Buy Offer from other user
@@ -169,7 +162,7 @@ contract NFTMarketplaceBuyOffers is
         uint32 tokenId_,
         address bidder_
     ) public nonReentrant {
-        uint256 nftId = _makeNftId(contractAddress_, tokenId_);
+        uint256 nftId = Helpers.makeNftId(contractAddress_, tokenId_);
         uint256 indexOfIdToBid = _userNftIdToBids[bidder_][nftId];
         uint256 bid = _idToBid[indexOfIdToBid];
         require(bid > 0, "No active offer found");
@@ -188,13 +181,7 @@ contract NFTMarketplaceBuyOffers is
 
         // Payment & fee calculation
         uint256 paymentToSeller = bid -
-            Helpers._mulDiv(
-                NFTMarketplaceContractManager(_contractManager).getFee(
-                    contractAddress_
-                ),
-                bid,
-                100
-            );
+            Helpers._mulDiv(getFee(contractAddress_), bid, 100);
 
         //NFT transfer. Fails if msg sender is not the owner of NFT.
         IERC721(contractAddress_).safeTransferFrom(
@@ -203,7 +190,7 @@ contract NFTMarketplaceBuyOffers is
             tokenId_
         );
 
-        _safeTransferValue(_msgSender(), paymentToSeller);
+        Address.sendValue(payable(_msgSender()), paymentToSeller);
     }
 
     function bidOfUserByIndex(address user_, uint256 index_)
@@ -255,7 +242,7 @@ contract NFTMarketplaceBuyOffers is
         uint256 salesFees = address(this).balance - _pendingFunds;
         require(salesFees > 0, "No sales fees to retrieve");
 
-        _safeTransferValue(owner(), salesFees);
+        Address.sendValue(payable(owner()), salesFees);
     }
 
     function _addBuyOffer(
@@ -328,15 +315,6 @@ contract NFTMarketplaceBuyOffers is
 
     function _msgSender() internal view override returns (address) {
         return ContextMixin.msgSender();
-    }
-
-    modifier onlyWhitelistedContract(address contractAddress_) {
-        require(
-            NFTMarketplaceContractManager(_contractManager)
-                .isWhitelistedNFTContract(contractAddress_),
-            "Contract is not auctionable"
-        );
-        _;
     }
 
     modifier onlyNotPanic() {

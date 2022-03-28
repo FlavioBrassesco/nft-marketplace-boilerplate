@@ -13,14 +13,9 @@ const GAS_PRICE = ethers.BigNumber.from("20000000000");
 
 describe("NFTMarketplace", () => {
   let nftmarketplace;
-  let nftcontractmanager;
   let nftminter;
   beforeEach(async () => {
-    nftcontractmanager = await deployManager();
-    nftmarketplace = await deployMarketplace(
-      "NFTMarketplace",
-      nftcontractmanager.address
-    );
+    nftmarketplace = await deployMarketplace("NFTMarketplace");
     nftminter = await deployMinter("NFTMinter", "NM1", "", "", 1000, 1000);
   });
 
@@ -75,7 +70,7 @@ describe("NFTMarketplace", () => {
       await mint(nftminter, addr1.address, 1);
 
       // marketplace owner adds NFT contract as whitelisted
-      const tx = await nftcontractmanager.setWhitelistedNFTContract(
+      const tx = await nftmarketplace.setWhitelistedNFTContract(
         nftminter.address,
         true
       );
@@ -98,7 +93,7 @@ describe("NFTMarketplace", () => {
       await mint(nftminter, addr1.address, 1);
 
       // marketplace owner adds NFT contract as whitelisted
-      const tx = await nftcontractmanager.setWhitelistedNFTContract(
+      const tx = await nftmarketplace.setWhitelistedNFTContract(
         nftminter.address,
         true
       );
@@ -128,7 +123,7 @@ describe("NFTMarketplace", () => {
       await mint(nftminter, addr1.address, 2);
 
       // marketplace owner adds NFT contract as whitelisted
-      const tx = await nftcontractmanager.setWhitelistedNFTContract(
+      const tx = await nftmarketplace.setWhitelistedNFTContract(
         nftminter.address,
         true
       );
@@ -157,7 +152,7 @@ describe("NFTMarketplace", () => {
       await mint(nftminter, addr1.address, 1);
 
       // marketplace owner adds NFT contract as whitelisted
-      const tx = await nftcontractmanager.setWhitelistedNFTContract(
+      const tx = await nftmarketplace.setWhitelistedNFTContract(
         nftminter.address,
         true
       );
@@ -186,7 +181,7 @@ describe("NFTMarketplace", () => {
       await mint(nftminter, addr1.address, 1);
 
       // marketplace owner adds NFT contract as whitelisted
-      const tx = await nftcontractmanager.setWhitelistedNFTContract(
+      const tx = await nftmarketplace.setWhitelistedNFTContract(
         nftminter.address,
         true
       );
@@ -235,14 +230,14 @@ describe("NFTMarketplace", () => {
       await mint(nftminter, addr1.address, 2);
 
       // marketplace owner adds NFT contract as whitelisted
-      const tx = await nftcontractmanager.setWhitelistedNFTContract(
+      const tx = await nftmarketplace.setWhitelistedNFTContract(
         nftminter.address,
         true
       );
       tx.wait();
 
       // marketplace owner sets secondary sales fee to 10%
-      const txFee = await nftcontractmanager.setFee(nftminter.address, 10);
+      const txFee = await nftmarketplace.setFee(nftminter.address, 10);
       txFee.wait();
 
       // user addr1 allows marketplace to operate in his behalf
@@ -273,14 +268,14 @@ describe("NFTMarketplace", () => {
       await mint(nftminter, addr1.address, 1);
 
       // marketplace owner adds NFT contract as whitelisted
-      const tx = await nftcontractmanager.setWhitelistedNFTContract(
+      const tx = await nftmarketplace.setWhitelistedNFTContract(
         nftminter.address,
         true
       );
       tx.wait();
 
       // marketplace owner sets secondary sales fee to 10%
-      const txFee = await nftcontractmanager.setFee(nftminter.address, 10);
+      const txFee = await nftmarketplace.setFee(nftminter.address, 10);
       txFee.wait();
 
       // user addr1 allows marketplace to operate in his behalf
@@ -311,14 +306,14 @@ describe("NFTMarketplace", () => {
       await mint(nftminter, addr1.address, 1);
 
       // marketplace owner adds NFT contract as whitelisted
-      const tx = await nftcontractmanager.setWhitelistedNFTContract(
+      const tx = await nftmarketplace.setWhitelistedNFTContract(
         nftminter.address,
         true
       );
       tx.wait();
 
       // marketplace owner sets secondary sales fee to 10%
-      const txFee = await nftcontractmanager.setFee(nftminter.address, 10);
+      const txFee = await nftmarketplace.setFee(nftminter.address, 10);
       txFee.wait();
 
       // user addr1 allows marketplace to operate in his behalf
@@ -350,14 +345,14 @@ describe("NFTMarketplace", () => {
       await mint(nftminter, addr1.address, 1);
 
       // marketplace owner adds NFT contract as whitelisted
-      const tx = await nftcontractmanager.setWhitelistedNFTContract(
+      const tx = await nftmarketplace.setWhitelistedNFTContract(
         nftminter.address,
         true
       );
       tx.wait();
 
       // marketplace owner sets secondary sales fee to 10%
-      const txFee = await nftcontractmanager.setFee(nftminter.address, 10);
+      const txFee = await nftmarketplace.setFee(nftminter.address, 10);
       txFee.wait();
 
       // user addr1 allows marketplace to operate in his behalf
@@ -395,7 +390,7 @@ describe("NFTMarketplace", () => {
 
       // calculating secondary sales fee
       const fee =
-        ((await nftcontractmanager.getFee(nftminter.address)) * price) / 100;
+        ((await nftmarketplace.getFee(nftminter.address)) * price) / 100;
       const payment = price - fee;
 
       // checking that transfer was successful
@@ -430,18 +425,18 @@ describe("NFTMarketplace", () => {
       const [, addr1, addr2] = await ethers.getSigners();
 
       // marketplace owner adds NFT contract as whitelisted
-      const tx = await nftcontractmanager.setWhitelistedNFTContract(
+      const tx = await nftmarketplace.setWhitelistedNFTContract(
         nftminter.address,
         true
       );
       tx.wait();
 
       // set fee and floor price
-      const txFee = await nftcontractmanager.setFee(nftminter.address, 10);
+      const txFee = await nftmarketplace.setFee(nftminter.address, 10);
       txFee.wait();
 
       const price = 10000;
-      const txFloorPrice = await nftcontractmanager.setFloorPrice(
+      const txFloorPrice = await nftmarketplace.setFloorPrice(
         nftminter.address,
         price
       );
@@ -514,11 +509,11 @@ describe("NFTMarketplace", () => {
       tx2.wait();
 
       // set floor price & fee
-      const txFee = await nftcontractmanager.setFee(nftminter.address, 10);
+      const txFee = await nftmarketplace.setFee(nftminter.address, 10);
       txFee.wait();
 
       const price = 10000;
-      const txFloorPrice = await nftcontractmanager.setFloorPrice(
+      const txFloorPrice = await nftmarketplace.setFloorPrice(
         nftminter.address,
         price
       );
@@ -583,7 +578,7 @@ describe("NFTMarketplace", () => {
       await mint(nftminter, owner.address, 2);
 
       // marketplace owner adds NFT contract as whitelisted
-      const tx = await nftcontractmanager.setWhitelistedNFTContract(
+      const tx = await nftmarketplace.setWhitelistedNFTContract(
         nftminter.address,
         true
       );
@@ -596,7 +591,7 @@ describe("NFTMarketplace", () => {
       tx2.wait();
 
       // set fee
-      const txFee = await nftcontractmanager.setFee(nftminter.address, 10);
+      const txFee = await nftmarketplace.setFee(nftminter.address, 10);
       txFee.wait();
 
       // Meta transaction preparation
@@ -658,7 +653,7 @@ describe("NFTMarketplace", () => {
       await mint(nftminter, owner.address, 2);
 
       // marketplace owner adds NFT contract as whitelisted
-      const tx = await nftcontractmanager.setWhitelistedNFTContract(
+      const tx = await nftmarketplace.setWhitelistedNFTContract(
         nftminter.address,
         true
       );
@@ -671,11 +666,11 @@ describe("NFTMarketplace", () => {
       tx2.wait();
 
       // set floor price & fee
-      const txFee = await nftcontractmanager.setFee(nftminter.address, 10);
+      const txFee = await nftmarketplace.setFee(nftminter.address, 10);
       txFee.wait();
 
       const price = 10000;
-      const txFloorPrice = await nftcontractmanager.setFloorPrice(
+      const txFloorPrice = await nftmarketplace.setFloorPrice(
         nftminter.address,
         price
       );
@@ -742,7 +737,7 @@ describe("NFTMarketplace", () => {
       const provider = waffle.provider;
 
       // marketplace owner adds NFT contract as whitelisted
-      const tx = await nftcontractmanager.setWhitelistedNFTContract(
+      const tx = await nftmarketplace.setWhitelistedNFTContract(
         nftminter.address,
         true
       );
@@ -755,11 +750,11 @@ describe("NFTMarketplace", () => {
       tx2.wait();
 
       // set fee and floor price
-      const txFee = await nftcontractmanager.setFee(nftminter.address, 10);
+      const txFee = await nftmarketplace.setFee(nftminter.address, 10);
       txFee.wait();
 
       const price = 10000;
-      const txFloorPrice = await nftcontractmanager.setFloorPrice(
+      const txFloorPrice = await nftmarketplace.setFloorPrice(
         nftminter.address,
         price
       );
@@ -842,14 +837,14 @@ describe("NFTMarketplace", () => {
       await mint(nftminter, addr1.address, 2);
 
       // marketplace owner adds NFT contract as whitelisted
-      const tx = await nftcontractmanager.setWhitelistedNFTContract(
+      const tx = await nftmarketplace.setWhitelistedNFTContract(
         nftminter.address,
         true
       );
       tx.wait();
 
       // marketplace owner sets fee
-      const txFee = await nftcontractmanager.setFee(nftminter.address, 10);
+      const txFee = await nftmarketplace.setFee(nftminter.address, 10);
       txFee.wait();
 
       // user addr1 allows marketplace to operate in his behalf
@@ -860,7 +855,7 @@ describe("NFTMarketplace", () => {
 
       const price = 1000000;
       const fee =
-        ((await nftcontractmanager.getFee(nftminter.address)) * price) / 100;
+        ((await nftmarketplace.getFee(nftminter.address)) * price) / 100;
 
       // user creates MarketItem
       const tx3 = await nftmarketplace
@@ -902,7 +897,7 @@ describe("NFTMarketplace", () => {
       const qty = 3;
       await mint(nftminter, addr1.address, qty);
 
-      const txWhitelist = await nftcontractmanager.setWhitelistedNFTContract(
+      const txWhitelist = await nftmarketplace.setWhitelistedNFTContract(
         nftminter.address,
         true
       );
@@ -942,7 +937,7 @@ describe("NFTMarketplace", () => {
       await mint(nftminter, addr1.address, qty);
       await mint(nftminter, addr2.address, qty);
 
-      const txWhitelist = await nftcontractmanager.setWhitelistedNFTContract(
+      const txWhitelist = await nftmarketplace.setWhitelistedNFTContract(
         nftminter.address,
         true
       );

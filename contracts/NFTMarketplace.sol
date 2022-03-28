@@ -7,7 +7,6 @@ import "@openzeppelin/contracts/security/ReentrancyGuard.sol";
 import "@openzeppelin/contracts/access/Ownable.sol";
 import "@openzeppelin/contracts/token/ERC721/utils/ERC721Holder.sol";
 import "./ContextMixin.sol";
-import "./NFTMarketplaceHelpers.sol";
 import "./Helpers.sol";
 import "./NativeMetaTransactionCalldata.sol";
 import "./NFTMarketplaceContractManager.sol";
@@ -23,7 +22,7 @@ contract NFTMarketplace is
     ERC721Holder,
     ContextMixin,
     NativeMetaTransactionCalldata,
-    NFTMarketplaceHelpers
+    NFTMarketplaceContractManager
 {
     using Counters for Counters.Counter;
 
@@ -66,12 +65,10 @@ contract NFTMarketplace is
     );
 
     string private _name;
-    address private _contractManager;
 
-    constructor(string memory name_, address contractManager_) {
+    constructor(string memory name_) {
         _name = name_;
         _initializeEIP712(name_);
-        _contractManager = contractManager_;
     }
 
     function name() public view returns (string memory) {
@@ -97,7 +94,7 @@ contract NFTMarketplace is
     {
         require(price_ > 0, "Price must be at least 1 wei");
 
-        uint256 nftId = _makeNftId(contractAddress_, tokenId_);
+        uint256 nftId = Helpers.makeNftId(contractAddress_, tokenId_);
 
         _addMarketItem(_msgSender(), nftId, price_);
 
@@ -124,7 +121,7 @@ contract NFTMarketplace is
         onlyForSale(contractAddress_, tokenId_)
         onlySeller(contractAddress_, tokenId_)
     {
-        uint256 nftId = _makeNftId(contractAddress_, tokenId_);
+        uint256 nftId = Helpers.makeNftId(contractAddress_, tokenId_);
 
         emit MarketItemTransfer(
             _nftIdToMarketItem[nftId].seller,
@@ -153,7 +150,7 @@ contract NFTMarketplace is
         onlyForSale(contractAddress_, tokenId_)
         onlyNotSeller(contractAddress_, tokenId_)
     {
-        uint256 nftId = _makeNftId(contractAddress_, tokenId_);
+        uint256 nftId = Helpers.makeNftId(contractAddress_, tokenId_);
 
         require(
             msg.value == _nftIdToMarketItem[nftId].price,
@@ -164,13 +161,7 @@ contract NFTMarketplace is
 
         // Payment & fee calculation
         uint256 paymentToSeller = msg.value -
-            Helpers._mulDiv(
-                NFTMarketplaceContractManager(_contractManager).getFee(
-                    contractAddress_
-                ),
-                msg.value,
-                100
-            );
+            Helpers._mulDiv(getFee(contractAddress_), msg.value, 100);
 
         emit MarketItemTransfer(
             seller,
@@ -189,7 +180,7 @@ contract NFTMarketplace is
 
         _destroyMarketItem(seller, nftId);
 
-        _safeTransferValue(seller, paymentToSeller);
+        Address.sendValue(payable(seller), paymentToSeller);
     }
 
     /// @notice Buy a non-listed-in-marketplace item. Only NFTs belonging to the marketplace owner.
@@ -210,8 +201,7 @@ contract NFTMarketplace is
         nonReentrant
         onlyWhitelistedContract(contractAddress_)
     {
-        uint256 floorPrice = NFTMarketplaceContractManager(_contractManager)
-            .getFloorPrice(contractAddress_);
+        uint256 floorPrice = getFloorPrice(contractAddress_);
         require(floorPrice > 0, "Floor price must be at least 1 wei");
         require(msg.value == floorPrice, "Asking price must be == floorPrice");
 
@@ -226,7 +216,7 @@ contract NFTMarketplace is
         // NFT transfer
         IERC721(contractAddress_).safeTransferFrom(_msgSender(), to_, tokenId_);
 
-        _safeTransferValue(_msgSender(), msg.value);
+        Address.sendValue(payable(_msgSender()), msg.value);
     }
 
     function itemOfUserByIndex(address user_, uint256 _index)
@@ -269,7 +259,7 @@ contract NFTMarketplace is
 
     /// @notice Retrieve payed secondary sales fees.
     function transferSalesFees() public virtual onlyOwner {
-        _safeTransferValue(owner(), address(this).balance);
+        Address.sendValue(payable(owner()), address(this).balance);
     }
 
     function _addMarketItem(
@@ -327,8 +317,9 @@ contract NFTMarketplace is
     modifier onlyNotSeller(address contractAddress_, uint32 tokenId_) {
         require(
             _msgSender() !=
-                _nftIdToMarketItem[_makeNftId(contractAddress_, tokenId_)]
-                    .seller,
+                _nftIdToMarketItem[
+                    Helpers.makeNftId(contractAddress_, tokenId_)
+                ].seller,
             "Seller not allowed"
         );
         _;
@@ -336,8 +327,8 @@ contract NFTMarketplace is
 
     modifier onlyForSale(address contractAddress_, uint32 tokenId_) {
         require(
-            _nftIdToMarketItem[_makeNftId(contractAddress_, tokenId_)].seller !=
-                address(0),
+            _nftIdToMarketItem[Helpers.makeNftId(contractAddress_, tokenId_)]
+                .seller != address(0),
             "Item not for sale"
         );
         _;
@@ -346,18 +337,10 @@ contract NFTMarketplace is
     modifier onlySeller(address contractAddress_, uint32 tokenId_) {
         require(
             _msgSender() ==
-                _nftIdToMarketItem[_makeNftId(contractAddress_, tokenId_)]
-                    .seller,
+                _nftIdToMarketItem[
+                    Helpers.makeNftId(contractAddress_, tokenId_)
+                ].seller,
             "Only seller allowed"
-        );
-        _;
-    }
-
-    modifier onlyWhitelistedContract(address contractAddress_) {
-        require(
-            NFTMarketplaceContractManager(_contractManager)
-                .isWhitelistedNFTContract(contractAddress_),
-            "Contract not allowed"
         );
         _;
     }

@@ -3,6 +3,21 @@ pragma solidity ^0.8.0;
 import "./libraries/abdk/ABDKMathQuad.sol";
 
 library Helpers {
+    /// @dev A cheap, gas efficient function to create a unique NFT ID joining address and token ID with a bitwise operation.
+    /// this assumes that _tokenId is implemented as a number.
+    /// If the marketplace is going to sell only one collection, this becomes useless and code should be refactored.
+    /// @param contractAddress_ The address of the contract
+    /// @param tokenId_ The ID of the token
+    /// @return uint256 unique NFT ID.
+    function makeNftId(address contractAddress_, uint32 tokenId_)
+        public
+        pure
+        returns (uint256)
+    {
+        return
+            uint256(0) | uint160(contractAddress_) | (uint256(tokenId_) << 160);
+    }
+
     /// @dev Used to get accurate percentage of a uint
     /// source: https://medium.com/coinmonks/math-in-solidity-part-3-percents-and-proportions-4db014e080b1
     function _mulDiv(
@@ -20,22 +35,5 @@ library Helpers {
                     ABDKMathQuad.fromUInt(z_)
                 )
             );
-    }
-
-    /// @dev Gets revert msg from a low level call returnData
-    /// source: https://ethereum.stackexchange.com/questions/83528/how-can-i-get-the-revert-reason-of-a-call-in-solidity-so-that-i-can-use-it-in-th
-    function _getRevertMsg(bytes memory _returnData)
-        internal
-        pure
-        returns (string memory)
-    {
-        // If the _res length is less than 68, then the transaction failed silently (without a revert message)
-        if (_returnData.length < 68) return "Transaction reverted silently";
-
-        assembly {
-            // Slice the sighash.
-            _returnData := add(_returnData, 0x04)
-        }
-        return abi.decode(_returnData, (string)); // All that remains is the revert string
     }
 }
