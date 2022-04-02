@@ -11,7 +11,7 @@ const mnemonic = process.env.MNEMONIC;
 
 module.exports = {
   solidity: {
-    version: "0.8.0",
+    compilers: [{ version: "0.8.0" }, { version: "0.5.16" }],
     settings: {
       optimizer: {
         enabled: true,
@@ -23,7 +23,7 @@ module.exports = {
     ganache: {
       from: from,
       chainId: 1337,
-      url: "HTTP://127.0.0.1:7545",
+      url: "HTTP://127.0.0.1:8545",
       accounts: {
         mnemonic: mnemonic,
       },

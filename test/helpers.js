@@ -26,41 +26,74 @@ const mint = async (nftminter, address, tokensQty) => {
     tx.wait();
   }
 };
+const deployMetaTxRelayer = async (name) => {
+  const MetaTxRelayer = await ethers.getContractFactory(
+    "NativeMetaTransactionCalldata"
+  );
+  const metatxrelayer = await MetaTxRelayer.deploy(name);
+  await metatxrelayer.deployed();
+  return metatxrelayer;
+};
 const deployManager = async () => {
-  const NFTContractManager = await ethers.getContractFactory(
-    "NFTMarketplaceContractManager"
+  const NFTCollectionManager = await ethers.getContractFactory(
+    "NFTCollectionManager"
   );
-  const nftcontractmanager = await NFTContractManager.deploy();
-  await nftcontractmanager.deployed();
-  return nftcontractmanager;
+  const nftcollectionmanager = await NFTCollectionManager.deploy();
+  await nftcollectionmanager.deployed();
+  return nftcollectionmanager;
 };
-const deployMarketplace = async (name) => {
+const deployMarketplace = async (erc20address, pairaddress, manageraddress) => {
   const NFTMarketplace = await ethers.getContractFactory("NFTMarketplace");
-  const nftmarketplace = await NFTMarketplace.deploy(name);
+  const nftmarketplace = await NFTMarketplace.deploy(
+    erc20address,
+    pairaddress,
+    manageraddress
+  );
   await nftmarketplace.deployed();
   return nftmarketplace;
 };
-const deployMarketplaceAuctions = async (name, maxDays) => {
-  const NFTMarketplace = await ethers.getContractFactory(
-    "NFTMarketplaceAuctions"
-  );
-  const nftmarketplace = await NFTMarketplace.deploy(name, maxDays);
-  await nftmarketplace.deployed();
-  return nftmarketplace;
+const deployAuctions = async (maxDays, manageraddress) => {
+  const NFTAuctions = await ethers.getContractFactory("NFTAuctions");
+  const nftauctions = await NFTAuctions.deploy(maxDays, manageraddress);
+  await nftauctions.deployed();
+  return nftauctions;
 };
 
-const deployMarketplaceBuyOffers = async (name, maxDays) => {
-  const NFTMarketplace = await ethers.getContractFactory(
-    "NFTMarketplaceBuyOffers"
-  );
-  const nftmarketplace = await NFTMarketplace.deploy(name, maxDays);
-  await nftmarketplace.deployed();
-  return nftmarketplace;
+const deployBuyOffers = async (maxDays, manageraddress) => {
+  const NFTBuyOffers = await ethers.getContractFactory("NFTBuyOffers");
+  const nftbuyoffers = await NFTBuyOffers.deploy(maxDays, manageraddress);
+  await nftbuyoffers.deployed();
+  return nftbuyoffers;
+};
+
+const deployUniFactory = async (address) => {
+  const Unifactory = await ethers.getContractFactory("MockUniFactory");
+  const unifactory = await Unifactory.deploy(address);
+  await unifactory.deployed();
+  return unifactory;
+};
+
+const deployERC20 = async () => {
+  const ERC20 = await ethers.getContractFactory("MockERC20");
+  const erc20 = await ERC20.deploy();
+  await erc20.deployed();
+  return erc20;
+};
+
+const deployWeth = async () => {
+  const Weth = await ethers.getContractFactory("MockWeth");
+  const weth = await Weth.deploy();
+  await weth.deployed();
+  return weth;
 };
 
 module.exports.deployMinter = deployMinter;
 module.exports.deployManager = deployManager;
+module.exports.deployMetaTxRelayer = deployMetaTxRelayer;
 module.exports.deployMarketplace = deployMarketplace;
-module.exports.deployMarketplaceAuctions = deployMarketplaceAuctions;
-module.exports.deployMarketplaceBuyOffers = deployMarketplaceBuyOffers;
+module.exports.deployAuctions = deployAuctions;
+module.exports.deployBuyOffers = deployBuyOffers;
+module.exports.deployWeth = deployWeth;
+module.exports.deployERC20 = deployERC20;
+module.exports.deployUniFactory = deployUniFactory;
 module.exports.mint = mint;
