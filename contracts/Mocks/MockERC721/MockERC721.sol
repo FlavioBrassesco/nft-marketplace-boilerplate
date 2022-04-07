@@ -1,4 +1,4 @@
-//SPDX-License-Identifier: Unlicensed
+//SPDX-License-Identifier: GNU GPLv3 
 
 pragma solidity ^0.8.0;
 
@@ -13,7 +13,7 @@ import "@openzeppelin/contracts/token/ERC721/extensions/ERC721URIStorage.sol";
 /// @author Flavio Brassesco
 /// @notice Allows owner() to have an NFT collection compliant with ERC721 Interface
 /// @dev metadata is implemented as an URI set with _setTokenURI(). IERC721Metadata compliant. Token metadata is immutable.
-contract NFTMinter is
+contract MockERC721 is
   ERC721URIStorage,
   ERC721Enumerable,
   ContextMixin,

@@ -1,11 +1,11 @@
-//SPDX-License-Identifier: MIT
+//SPDX-License-Identifier: GNU GPLv3 
 pragma solidity ^0.8.0;
 import "@openzeppelin/contracts/access/Ownable.sol";
 import "@openzeppelin/contracts/utils/introspection/IERC165.sol";
 import "@openzeppelin/contracts/token/ERC721/IERC721.sol";
 import "@openzeppelin/contracts/utils/Address.sol";
 import "@openzeppelin/contracts/utils/structs/EnumerableSet.sol";
-import "./INFTCollectionManager.sol";
+import "./interfaces/INFTCollectionManager.sol";
 
 contract NFTCollectionManager is INFTCollectionManager, Ownable {
   using EnumerableSet for EnumerableSet.AddressSet;
@@ -59,7 +59,10 @@ contract NFTCollectionManager is INFTCollectionManager, Ownable {
     override(INFTCollectionManager)
     onlyOwner
   {
-    require(_collections.contains(contractAddress_), "Collection does not exists in marketplace");
+    require(
+      _collections.contains(contractAddress_),
+      "Collection does not exists in marketplace"
+    );
     // Edit this line to change the maximum fee.
     require(fee_ < 51, "Can't set fee higher than 50.00%");
     _collectionData[contractAddress_].fee = fee_;
@@ -86,7 +89,10 @@ contract NFTCollectionManager is INFTCollectionManager, Ownable {
     override(INFTCollectionManager)
     onlyOwner
   {
-    require(_collections.contains(contractAddress_), "Collection does not exists in marketplace");
+    require(
+      _collections.contains(contractAddress_),
+      "Collection does not exists in marketplace"
+    );
     require(floorPrice_ > 0, "Floor price must be at least 1 wei");
     _collectionData[contractAddress_].floorPrice = floorPrice_;
   }
