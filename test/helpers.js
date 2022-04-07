@@ -8,7 +8,7 @@ const deployMinter = async (
   maxSupply,
   floorPrice
 ) => {
-  const NFTMinter = await ethers.getContractFactory("NFTMinter");
+  const NFTMinter = await ethers.getContractFactory("MockERC721");
   const nftminter = await NFTMinter.deploy(
     name,
     symbol,
@@ -26,14 +26,6 @@ const mint = async (nftminter, address, tokensQty) => {
     tx.wait();
   }
 };
-const deployMetaTxRelayer = async (name) => {
-  const MetaTxRelayer = await ethers.getContractFactory(
-    "NativeMetaTransactionCalldata"
-  );
-  const metatxrelayer = await MetaTxRelayer.deploy(name);
-  await metatxrelayer.deployed();
-  return metatxrelayer;
-};
 const deployManager = async () => {
   const NFTCollectionManager = await ethers.getContractFactory(
     "NFTCollectionManager"
@@ -42,35 +34,40 @@ const deployManager = async () => {
   await nftcollectionmanager.deployed();
   return nftcollectionmanager;
 };
-const deployMarketplace = async (erc20address, pairaddress, manageraddress) => {
+const deployMarketplace = async (managerAddress, salesServiceAddress, forwarderAddress) => {
   const NFTMarketplace = await ethers.getContractFactory("NFTMarketplace");
   const nftmarketplace = await NFTMarketplace.deploy(
-    erc20address,
-    pairaddress,
-    manageraddress
+    managerAddress, salesServiceAddress, forwarderAddress
   );
   await nftmarketplace.deployed();
   return nftmarketplace;
 };
-const deployAuctions = async (maxDays, manageraddress) => {
+const deployAuctions = async (maxDays, managerAddress, salesServiceAddress, forwarderAddress) => {
   const NFTAuctions = await ethers.getContractFactory("NFTAuctions");
-  const nftauctions = await NFTAuctions.deploy(maxDays, manageraddress);
+  const nftauctions = await NFTAuctions.deploy(maxDays, managerAddress, salesServiceAddress, forwarderAddress);
   await nftauctions.deployed();
   return nftauctions;
 };
 
-const deployBuyOffers = async (maxDays, manageraddress) => {
+const deployBuyOffers = async (maxDays, managerAddress, salesServiceAddress, forwarderAddress) => {
   const NFTBuyOffers = await ethers.getContractFactory("NFTBuyOffers");
-  const nftbuyoffers = await NFTBuyOffers.deploy(maxDays, manageraddress);
+  const nftbuyoffers = await NFTBuyOffers.deploy(maxDays, managerAddress, salesServiceAddress, forwarderAddress);
   await nftbuyoffers.deployed();
   return nftbuyoffers;
 };
 
-const deployUniFactory = async (address) => {
+const deployUniFactory = async (feeToSetterAddress) => {
   const Unifactory = await ethers.getContractFactory("MockUniFactory");
-  const unifactory = await Unifactory.deploy(address);
+  const unifactory = await Unifactory.deploy(feeToSetterAddress);
   await unifactory.deployed();
   return unifactory;
+};
+
+const deployUniRouter = async (factoryAddress, wethAddress) => {
+  const UniRouter = await ethers.getContractFactory("MockUniRouter");
+  const unirouter = await UniRouter.deploy(factoryAddress, wethAddress);
+  await unirouter.deployed();
+  return unirouter;
 };
 
 const deployERC20 = async () => {
@@ -87,13 +84,28 @@ const deployWeth = async () => {
   return weth;
 };
 
+const deploySalesService = async (treasuryAddress) => {
+  const SalesService = await ethers.getContractFactory("SalesService");
+  const salesservice = await SalesService.deploy(treasuryAddress);
+  await salesservice.deployed();
+  return salesservice;
+};
+const deploySalesServiceERC20 = async (treasuryAddress) => {
+  const SalesService = await ethers.getContractFactory("SalesServiceERC20");
+  const salesservice = await SalesService.deploy(treasuryAddress);
+  await salesservice.deployed();
+  return salesservice;
+};
+
+
 module.exports.deployMinter = deployMinter;
 module.exports.deployManager = deployManager;
-module.exports.deployMetaTxRelayer = deployMetaTxRelayer;
 module.exports.deployMarketplace = deployMarketplace;
 module.exports.deployAuctions = deployAuctions;
 module.exports.deployBuyOffers = deployBuyOffers;
 module.exports.deployWeth = deployWeth;
 module.exports.deployERC20 = deployERC20;
 module.exports.deployUniFactory = deployUniFactory;
+module.exports.deploySalesService = deploySalesService;
+module.exports.deploySalesServiceERC20 = deploySalesServiceERC20;
 module.exports.mint = mint;
