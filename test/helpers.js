@@ -29,6 +29,7 @@ const mint = async (nftminter, address, tokensQty) => {
     tx.wait();
   }
 };
+
 const deployManager = async () => {
   const NFTCollectionManager = await ethers.getContractFactory(
     "NFTCollectionManager"
@@ -37,6 +38,7 @@ const deployManager = async () => {
   await nftcollectionmanager.deployed();
   return nftcollectionmanager;
 };
+
 const deployMarketplace = async (managerAddress, salesServiceAddress, forwarderAddress) => {
   const NFTMarketplace = await ethers.getContractFactory("NFTMarketplace");
   const nftmarketplace = await NFTMarketplace.deploy(
@@ -45,6 +47,7 @@ const deployMarketplace = async (managerAddress, salesServiceAddress, forwarderA
   await nftmarketplace.deployed();
   return nftmarketplace;
 };
+
 const deployAuctions = async (maxDays, managerAddress, salesServiceAddress, forwarderAddress) => {
   const NFTAuctions = await ethers.getContractFactory("NFTAuctions");
   const nftauctions = await NFTAuctions.deploy(maxDays, managerAddress, salesServiceAddress, forwarderAddress);
@@ -93,12 +96,20 @@ const deploySalesService = async (treasuryAddress, weth, router) => {
   await salesservice.deployed();
   return salesservice;
 };
+
 const deploySalesServiceERC20 = async (treasuryAddress, weth, erc20, router) => {
   const SalesService = await ethers.getContractFactory("SalesServiceERC20");
   const salesservice = await SalesService.deploy(treasuryAddress, weth, erc20, router);
   await salesservice.deployed();
   return salesservice;
 };
+
+const deployForwarder = async (name, version) => {
+  const Forwarder = await ethers.getContractFactory("Forwarder");
+  const forwarder = await Forwarder.deploy(name, version);
+  await forwarder.deployed();
+  return forwarder;
+}
 
 
 module.exports.deployMinter = deployMinter;
@@ -112,6 +123,7 @@ module.exports.deployUniFactory = deployUniFactory;
 module.exports.deployUniRouter = deployUniRouter;
 module.exports.deploySalesService = deploySalesService;
 module.exports.deploySalesServiceERC20 = deploySalesServiceERC20;
+module.exports.deployForwarder = deployForwarder;
 module.exports.mint = mint;
 module.exports.eth$ = eth$;
 module.exports.wei$eth = wei$eth;

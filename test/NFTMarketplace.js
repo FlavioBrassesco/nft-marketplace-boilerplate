@@ -23,14 +23,10 @@ describe("NFTMarketplace", () => {
     weth,
     manager;
   let owner, addr1, addr2, forwarder;
-  before(async () => {
-    [owner, addr1, addr2, forwarder] = await ethers.getSigners();
-
-    weth = await deployWeth();
-    unifactory = await deployUniFactory(owner.address);
-  });
 
   beforeEach(async () => {
+    [owner, addr1, addr2, forwarder] = await ethers.getSigners();
+    
     weth = await deployWeth();
     manager = await deployManager();
     unifactory = await deployUniFactory(owner.address);
@@ -331,11 +327,9 @@ describe("NFTMarketplace", () => {
       txFloorPrice.wait();
 
       await expect(
-        nftmarketplace
-          .connect(addr2)
-          .buy(nftminter.address, 0, ADDR_0, 0, {
-            value: eth$("1.0"),
-          })
+        nftmarketplace.connect(addr2).buy(nftminter.address, 0, ADDR_0, 0, {
+          value: eth$("1.0"),
+        })
       ).to.be.revertedWith("ERC721: transfer caller is not owner nor approved");
     });
 
@@ -404,15 +398,21 @@ describe("NFTMarketplace", () => {
       tx4.wait();
 
       // enumeration
-      expect(await nftmarketplace.getUserItemsCount(addr1.address, nftminter.address)).to.equal(0);
-      expect(await nftmarketplace.getAllItemsCount(nftminter.address)).to.equal(0);
+      expect(
+        await nftmarketplace.getUserItemsCount(addr1.address, nftminter.address)
+      ).to.equal(0);
+      expect(await nftmarketplace.getAllItemsCount(nftminter.address)).to.equal(
+        0
+      );
 
       // ownership
       expect(await nftminter.ownerOf(0)).to.equal(addr2.address);
 
       const fee = price.mul(await manager.getFee(nftminter.address)).div(100);
       // payment
-      expect(await salesservice.getPendingRevenue(addr1.address)).to.equal(price.sub(fee));
+      expect(await salesservice.getPendingRevenue(addr1.address)).to.equal(
+        price.sub(fee)
+      );
       expect(await salesservice.getPendingRevenue(owner.address)).to.equal(fee);
     });
   });
