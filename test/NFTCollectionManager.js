@@ -14,12 +14,12 @@ describe("NFTCollectionManager", () => {
     nftminter = await deployMinter("NFTMinter", "NM1", "", "", 10000, 10000);
   });
 
-  describe("setWhitelistedCollection & isWhitelistedCollection", () => {
+  describe("addWhitelistedCollection & isWhitelistedCollection", () => {
     it("Should revert if calling from addr1", async () => {
       await expect(
         nftcollectionmanager
           .connect(addr1)
-          .setWhitelistedCollection(nftminter.address, true)
+          .addWhitelistedCollection(nftminter.address, true)
       ).to.be.revertedWith("Ownable: caller is not the owner");
     });
     it("Should revert if trying to whitelist a not IERC165 & IERC721 compliant address", async () => {
@@ -27,7 +27,7 @@ describe("NFTCollectionManager", () => {
       // if calling a contract that implements IERC165 but no IERC721.
       // if calling a contract that does not implements IERC165, transaction reverts silently
       await expect(
-        nftcollectionmanager.setWhitelistedCollection(
+        nftcollectionmanager.addWhitelistedCollection(
           nftcollectionmanager.address,
           true
         )
@@ -36,7 +36,7 @@ describe("NFTCollectionManager", () => {
 
     it("Should return true if nftminter address is succesfully whitelisted", async () => {
       const addWhitelistedNFTContract =
-        await nftcollectionmanager.setWhitelistedCollection(
+        await nftcollectionmanager.addWhitelistedCollection(
           nftminter.address,
           true
         );
@@ -47,7 +47,7 @@ describe("NFTCollectionManager", () => {
       ).to.equal(true);
     });
     it("Should return false if nftminter address is succesfully removed from whitelist", async () => {
-      const tx = await nftcollectionmanager.setWhitelistedCollection(
+      const tx = await nftcollectionmanager.addWhitelistedCollection(
         nftminter.address,
         false
       );
@@ -69,7 +69,7 @@ describe("NFTCollectionManager", () => {
     });
 
     it("Should revert if trying to set fee higher than 5000", async () => {
-      const txWhitelist = await nftcollectionmanager.setWhitelistedCollection(
+      const txWhitelist = await nftcollectionmanager.addWhitelistedCollection(
         nftminter.address,
         true
       );
@@ -81,7 +81,7 @@ describe("NFTCollectionManager", () => {
     });
 
     it("Should pass if fee succesfully setted", async () => {
-      const txWhitelist = await nftcollectionmanager.setWhitelistedCollection(
+      const txWhitelist = await nftcollectionmanager.addWhitelistedCollection(
         nftminter.address,
         true
       );
@@ -103,7 +103,7 @@ describe("NFTCollectionManager", () => {
       );
     });
     it("Should revert if trying to set floor price to 0", async () => {
-      const txWhitelist = await nftcollectionmanager.setWhitelistedCollection(
+      const txWhitelist = await nftcollectionmanager.addWhitelistedCollection(
         nftminter.address,
         true
       );
@@ -114,7 +114,7 @@ describe("NFTCollectionManager", () => {
     });
 
     it("Should pass if floor price is succesfully setted", async () => {
-      const txWhitelist = await nftcollectionmanager.setWhitelistedCollection(
+      const txWhitelist = await nftcollectionmanager.addWhitelistedCollection(
         nftminter.address,
         true
       );

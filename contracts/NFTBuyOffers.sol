@@ -21,10 +21,10 @@ import "./interfaces/ISalesService.sol";
 /// Buy offers should dissappear from front end in case the owner inits an auction.
 /// Is not possible to place a Buy offer for auction items.
 contract NFTBuyOffers is
+    ERC2771Context,
     ReentrancyGuard,
     Ownable,
     ERC721Holder,
-    ERC2771Context,
     Pausable
 {
     using EnumerableSet for EnumerableSet.AddressSet;
@@ -85,18 +85,18 @@ contract NFTBuyOffers is
 
         uint256 value;
         if (msg.value > 0) {
-            value = SalesService.approvePayment{value: msg.value}(address(this), 0, 0);
+            value = SalesService.approvePayment{value: msg.value}(address(this), msg.value, 0);
         } else {
             value = SalesService.approvePaymentERC20(
                 _msgSender(),
                 address(this),
                 tokenAddress_,
                 amountIn_,
-                0,
+                amountIn_,
                 0
             );
         }
-        
+
         _addBuyOffer(_msgSender(), contractAddress_, tokenId_, value);
 
         emit BuyOfferCreated(_msgSender(), contractAddress_, tokenId_, value);

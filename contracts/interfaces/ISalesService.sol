@@ -1,10 +1,16 @@
-//SPDX-License-Identifier: GNU GPLv3 
-pragma solidity 0.8.0;
+//SPDX-License-Identifier: GNU GPLv3
+pragma solidity ^0.8.0;
 
 interface ISalesService {
+    function WETH() external view returns (address);
 
-    function WETH() external  returns (address) ;
-    function BASE_CURRENCY() external returns(address);
+    function BASE_CURRENCY() external view returns (address);
+
+    function approvePayment(
+        address to_,
+        uint256 price_,
+        uint256 feePercentage_
+    ) external payable returns (uint256);
 
     function approvePaymentERC20(
         address from_,
@@ -13,26 +19,18 @@ interface ISalesService {
         uint256 amountIn_,
         uint256 price_,
         uint256 feePercentage_
-    ) external returns(uint256);
-
-    function approvePayment(
-        address to_,
-        uint256 price_,
-        uint256 feePercentage_
-    ) external payable returns(uint256);
-
-    function retrievePendingRevenue() external;
+    ) external returns (uint256);
 
     function unlockPendingRevenue(
         address to_,
         uint256 amount_,
-        uint256 fee
+        uint256 fee_
     ) external;
 
-    function getUserPendingRevenue(address user_)
+    function retrievePendingRevenue() external;
+
+    function getPendingRevenue(address user_)
         external
         view
         returns (uint256 revenue);
-
-    function getAmountsOutMin(address,address,uint256) external view returns (uint256);
 }

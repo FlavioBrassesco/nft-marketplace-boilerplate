@@ -1,4 +1,4 @@
-//SPDX-License-Identifier: GNU GPLv3 
+//SPDX-License-Identifier: GNU GPLv3
 pragma solidity ^0.8.0;
 
 import "@openzeppelin/contracts/token/ERC721/IERC721.sol";
@@ -18,11 +18,11 @@ import "./interfaces/ISalesService.sol";
 /// Users can't cancel an auction and higher bid always gets the NFT.
 /// Users must retrieve their money manually by calling retrievePendingFunds()
 contract NFTAuctions is
+    ERC2771Context,
     ReentrancyGuard,
     Ownable,
     Pausable,
-    ERC721Holder,
-    ERC2771Context
+    ERC721Holder
 {
     using EnumerableSet for EnumerableSet.UintSet;
 
@@ -41,7 +41,6 @@ contract NFTAuctions is
     uint256 internal MAX_DAYS;
     INFTCollectionManager internal CollectionManager;
     ISalesService internal SalesService;
-    address _trustedForwarder;
 
     event AuctionItemCreated(
         address indexed seller,
@@ -77,10 +76,9 @@ contract NFTAuctions is
         MAX_DAYS = maxDays_;
         CollectionManager = INFTCollectionManager(collectionManager_);
         SalesService = ISalesService(salesService_);
-        _trustedForwarder = trustedForwarder_;
     }
 
-    function createMarketAuction(
+    function createAuctionItem(
         address contractAddress_,
         uint256 tokenId_,
         uint256 floorPrice_,
@@ -138,57 +136,48 @@ contract NFTAuctions is
         AuctionItem memory auctionItem = _auctionItems[contractAddress_][
             tokenId_
         ];
-        
-        uint256 value;
-        if (SalesService.BASE_CURRENCY() != address(0)) {
-            if (msg.value > 0) {
-                value = SalesService.getAmountsOutMin(SalesService.WETH(), SalesService.BASE_CURRENCY(), msg.value);
-            } else {
-                value = SalesService.getAmountsOutMin(tokenAddress_, SalesService.BASE_CURRENCY(), amountIn_);
-            }
-        } else {
-            if (msg.value == 0) {
-                value = SalesService.getAmountsOutMin(tokenAddress_, SalesService.WETH(), amountIn_);
-            } else {
-                value = msg.value;
-            }
-        }
 
-        if (auctionItem.currentBidder == address(0)) {
-            require(
-                value >= auctionItem.currentBid,
-                "Your bid must be >= than floor price"
-            );
-        } else {
-            require(
-                value > auctionItem.currentBid,
-                "Your bid must be higher than last bid"
-            );
-        }
-
+        uint256 result;
         if (msg.value > 0) {
-            SalesService.approvePayment{value: msg.value}(address(this), value, 0);
+            result = SalesService.approvePayment{value: msg.value}(
+                address(this),
+                msg.value,
+                0
+            );
         } else {
-            SalesService.approvePaymentERC20(
+            result = SalesService.approvePaymentERC20(
                 _msgSender(),
                 address(this),
                 tokenAddress_,
                 amountIn_,
-                value,
+                amountIn_,
                 0
             );
         }
 
-        _addAuctionBid(contractAddress_, tokenId_, _msgSender(), value);
+        if (auctionItem.currentBidder == address(0)) {
+            require(
+                result >= auctionItem.currentBid,
+                "Your bid must be >= than floor price"
+            );
+        } else {
+            require(
+                result > auctionItem.currentBid,
+                "Your bid must be higher than last bid"
+            );
+        }
+
+        _addAuctionBid(contractAddress_, tokenId_, _msgSender(), result);
     }
 
     function finishAuctionSale(address contractAddress_, uint256 tokenId_)
         public
         nonReentrant
     {
-                require(_auctionItems[contractAddress_][tokenId_].endsAt > 0);
         require(
-            block.timestamp > _auctionItems[contractAddress_][tokenId_].endsAt,
+            _auctionItems[contractAddress_][tokenId_].endsAt > 0 &&
+                block.timestamp >
+                _auctionItems[contractAddress_][tokenId_].endsAt,
             "Auction must be finished"
         );
         if (
@@ -332,9 +321,7 @@ contract NFTAuctions is
             SalesService.unlockPendingRevenue(
                 auctionItem.seller,
                 auctionItem.currentBid,
-                    CollectionManager.getFee(
-                        contractAddress_
-                    )
+                CollectionManager.getFee(contractAddress_)
             );
         } else {
             // is not sold so we return the NFT.
@@ -378,9 +365,7 @@ contract NFTAuctions is
 
     function onlyWhitelisted(address contractAddress_) internal view {
         require(
-            CollectionManager.isWhitelistedCollection(
-                contractAddress_
-            ),
+            CollectionManager.isWhitelistedCollection(contractAddress_),
             "Contract is not whitelisted"
         );
     }

@@ -1,5 +1,8 @@
 const { ethers } = require("hardhat");
 
+const eth$ = ethers.utils.parseEther;
+const wei$eth = ethers.utils.formatEther;
+
 const deployMinter = async (
   name,
   symbol,
@@ -84,15 +87,15 @@ const deployWeth = async () => {
   return weth;
 };
 
-const deploySalesService = async (treasuryAddress) => {
+const deploySalesService = async (treasuryAddress, weth, router) => {
   const SalesService = await ethers.getContractFactory("SalesService");
-  const salesservice = await SalesService.deploy(treasuryAddress);
+  const salesservice = await SalesService.deploy(treasuryAddress, weth, router);
   await salesservice.deployed();
   return salesservice;
 };
-const deploySalesServiceERC20 = async (treasuryAddress) => {
+const deploySalesServiceERC20 = async (treasuryAddress, weth, erc20, router) => {
   const SalesService = await ethers.getContractFactory("SalesServiceERC20");
-  const salesservice = await SalesService.deploy(treasuryAddress);
+  const salesservice = await SalesService.deploy(treasuryAddress, weth, erc20, router);
   await salesservice.deployed();
   return salesservice;
 };
@@ -106,6 +109,9 @@ module.exports.deployBuyOffers = deployBuyOffers;
 module.exports.deployWeth = deployWeth;
 module.exports.deployERC20 = deployERC20;
 module.exports.deployUniFactory = deployUniFactory;
+module.exports.deployUniRouter = deployUniRouter;
 module.exports.deploySalesService = deploySalesService;
 module.exports.deploySalesServiceERC20 = deploySalesServiceERC20;
 module.exports.mint = mint;
+module.exports.eth$ = eth$;
+module.exports.wei$eth = wei$eth;

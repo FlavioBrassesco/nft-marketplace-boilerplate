@@ -12,18 +12,39 @@ const mnemonic = process.env.MNEMONIC;
 module.exports = {
   solidity: {
     compilers: [
-      { version: "0.8.0" },
-      { version: "0.5.16" },
-      { version: "0.6.6" },
-    ],
-    settings: {
-      optimizer: {
-        enabled: true,
-        runs: 800,
+      {
+        version: "0.8.12",
+        settings: {
+          optimizer: {
+            enabled: true,
+            runs: 999999,
+          },
+        },
       },
-    },
+      {
+        version: "0.5.16",
+        settings: {
+          optimizer: {
+            enabled: true,
+            runs: 999999,
+          },
+        },
+      },
+      {
+        version: "0.6.6",
+        settings: {
+          optimizer: {
+            enabled: true,
+            runs: 999999,
+          },
+        },
+      },
+    ],
   },
   networks: {
+    hardhat: {
+      // loggingEnabled: true
+    },
     ganache: {
       from: from,
       chainId: 1337,

@@ -8,9 +8,11 @@ const ADDR_0 = "0x0000000000000000000000000000000000000000";
 
 describe("NFTMinter", function () {
   let nftminter;
+  let owner, addr1;
   const MAX_SUPPLY = 3;
   const FLOOR_PRICE = 1000000;
   beforeEach(async () => {
+    [owner, addr1] = await ethers.getSigners();
     nftminter = await deployMinter(
       "NFTMinter1",
       "NM1",
@@ -30,13 +32,8 @@ describe("NFTMinter", function () {
     it("Should return contractURI", async function () {
       expect(await nftminter.contractURI()).to.equal(CONTRACT_URI);
     });
-    it("Should revert if getting URI for nonexistent token", async () => {
-      await expect(nftminter.tokenURI(0)).to.be.revertedWith(
-        "ERC721URIStorage: URI query for nonexistent token"
-      );
-    });
+
     it("Should pass if URI for tokens is correct", async () => {
-      const [, addr1] = await ethers.getSigners();
       await mint(nftminter, addr1.address, 1);
       expect(await nftminter.tokenURI(0)).to.equal(`${BASE_URI}0`);
     });
@@ -44,14 +41,12 @@ describe("NFTMinter", function () {
 
   describe("Minting", () => {
     it("Should revert if minter is not owner and does not send msg.value", async () => {
-      const [, addr1] = await ethers.getSigners();
       await expect(
         nftminter.connect(addr1).mint(addr1.address, "url")
       ).to.be.revertedWith("Value sent should be equal to floor price");
     });
 
     it("Should revert if minting more than totalSupply", async () => {
-      const [, addr1] = await ethers.getSigners();
       await mint(nftminter, addr1.address, MAX_SUPPLY);
 
       await expect(nftminter.mint(addr1.address, "url")).to.be.revertedWith(
@@ -66,8 +61,6 @@ describe("NFTMinter", function () {
     });
 
     it("Should pass if addr1 successfully mints by sending correct msg.value", async () => {
-      const [, addr1] = await ethers.getSigners();
-
       const options = {
         value: FLOOR_PRICE,
       };
@@ -96,7 +89,6 @@ describe("NFTMinter", function () {
     });
 
     it("Should revert if addr1 tries to transfer to 0 address", async () => {
-      const [, addr1] = await ethers.getSigners();
       await mint(nftminter, addr1.address, 1);
 
       await expect(
@@ -123,7 +115,6 @@ describe("NFTMinter", function () {
       const dummycontract = await DummyContract.deploy();
       await dummycontract.deployed();
 
-      const [, addr1] = await ethers.getSigners();
       await mint(nftminter, addr1.address, 1);
 
       await expect(
@@ -189,7 +180,6 @@ describe("NFTMinter", function () {
     });
 
     it("Should revert if addr1 tries to approve addr1", async () => {
-      const [, addr1] = await ethers.getSigners();
       await mint(nftminter, addr1.address, 1);
 
       await expect(
@@ -204,7 +194,6 @@ describe("NFTMinter", function () {
     });
 
     it("Should revert if addr1 tries to setApprovalForAll to addr1", async () => {
-      const [, addr1] = await ethers.getSigners();
       await expect(
         nftminter.connect(addr1).setApprovalForAll(addr1.address, true)
       ).to.be.revertedWith("ERC721: approve to caller");
@@ -240,7 +229,6 @@ describe("NFTMinter", function () {
 
   describe("ERC721Enumerable", () => {
     it("Should pass if tokenOfOwnerByIndex correctly lists all tokens from addr1", async () => {
-      const [, addr1] = await ethers.getSigners();
       await mint(nftminter, addr1.address, MAX_SUPPLY);
 
       const balance = await nftminter.balanceOf(addr1.address);
@@ -260,7 +248,6 @@ describe("NFTMinter", function () {
     });
 
     it("Should pass if all tokens get listed correctly", async () => {
-      const [, addr1] = await ethers.getSigners();
       await mint(nftminter, addr1.address, MAX_SUPPLY);
 
       const totalSupply = await nftminter.totalSupply();

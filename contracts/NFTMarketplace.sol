@@ -1,4 +1,4 @@
-//SPDX-License-Identifier: GNU GPLv3 
+//SPDX-License-Identifier: GNU GPLv3
 pragma solidity ^0.8.0;
 
 import "@openzeppelin/contracts/security/ReentrancyGuard.sol";
@@ -15,9 +15,9 @@ import "./interfaces/ISalesService.sol";
 /// @author Flavio Brassesco
 /// @notice Users can use this marketplace to sell NFTs (ERC721) that are part of collections developed by or allowed by the marketplace owner.
 contract NFTMarketplace is
+    ERC2771Context,
     ReentrancyGuard,
     Ownable,
-    ERC2771Context,
     ERC721Holder,
     Pausable
 {
@@ -36,7 +36,6 @@ contract NFTMarketplace is
     string private _name;
     INFTCollectionManager internal CollectionManager;
     ISalesService internal SalesService;
-    address internal _trustedForwarder;
 
     event MarketItemCreated(
         address indexed seller,
@@ -60,63 +59,13 @@ contract NFTMarketplace is
         uint256 price
     );
 
-    constructor(address collectionManager_, address salesService_, address trustedForwarder_)
-        ERC2771Context(trustedForwarder_)
-    {
+    constructor(
+        address collectionManager_,
+        address salesService_,
+        address trustedForwarder_
+    ) ERC2771Context(trustedForwarder_) {
         CollectionManager = INFTCollectionManager(collectionManager_);
         SalesService = ISalesService(salesService_);
-        _trustedForwarder = trustedForwarder_;
-    }
-
-    function buy(
-        address contractAddress_,
-        uint256 tokenId_,
-        address tokenAddress_,
-        uint256 amountIn_
-    ) public payable nonReentrant whenNotPaused {
-        bool marketOwner = false;
-        address seller = _marketItems[contractAddress_][tokenId_].seller;
-        uint256 price;
-        uint256 feePercentage;
-
-        // If item is not for sale we try to sell an item from market owner address.
-        // This is useful for market owners that already have minted a batch of NFTs to sell,
-        // instead of doing a pay-to-mint sale
-        if (seller == address(0)) {
-            seller = owner();
-            price = CollectionManager.getFloorPrice(
-                contractAddress_
-            );
-            feePercentage = 0;
-            marketOwner = true;
-        } else {
-            price = _marketItems[contractAddress_][tokenId_].price;
-            feePercentage = CollectionManager.getFee(
-                contractAddress_
-            );
-        }
-
-        emit MarketItemTransferred(
-            seller,
-            _msgSender(),
-            contractAddress_,
-            tokenId_,
-            price
-        );
-
-        if (msg.value > 0) {
-            SalesService.approvePayment{value: msg.value}(seller, price, feePercentage);
-        } else {
-            SalesService.approvePaymentERC20(
-                _msgSender(),
-                seller,
-                tokenAddress_,
-                amountIn_,
-                price,
-                feePercentage
-            );
-        }
-        _sellItem(_msgSender(), contractAddress_, tokenId_, marketOwner);
     }
 
     function createMarketItem(
@@ -180,6 +129,59 @@ contract NFTMarketplace is
             _msgSender(),
             tokenId_
         );
+    }
+
+    function buy(
+        address contractAddress_,
+        uint256 tokenId_,
+        address tokenAddress_,
+        uint256 amountIn_
+    ) public payable nonReentrant whenNotPaused {
+        bool marketOwner = false;
+        address seller = _marketItems[contractAddress_][tokenId_].seller;
+        uint256 price;
+        uint256 feePercentage;
+
+        require(seller != _msgSender(), "Seller not allowed");
+
+        // If item is not for sale we try to sell an item from market owner address.
+        // This is useful for market owners that already have minted a batch of NFTs to sell,
+        // instead of doing a pay-to-mint sale
+        if (seller == address(0)) {
+            seller = owner();
+            price = CollectionManager.getFloorPrice(contractAddress_);
+            feePercentage = 0;
+            marketOwner = true;
+        } else {
+            price = _marketItems[contractAddress_][tokenId_].price;
+            feePercentage = CollectionManager.getFee(contractAddress_);
+        }
+
+        emit MarketItemTransferred(
+            seller,
+            _msgSender(),
+            contractAddress_,
+            tokenId_,
+            price
+        );
+
+        if (msg.value > 0) {
+            SalesService.approvePayment{value: msg.value}(
+                seller,
+                price,
+                feePercentage
+            );
+        } else {
+            SalesService.approvePaymentERC20(
+                _msgSender(),
+                seller,
+                tokenAddress_,
+                amountIn_,
+                price,
+                feePercentage
+            );
+        }
+        _sellItem(_msgSender(), contractAddress_, tokenId_, marketOwner);
     }
 
     function itemOfUserByIndex(
@@ -307,9 +309,7 @@ contract NFTMarketplace is
 
     function onlyWhitelisted(address contractAddress_) internal view {
         require(
-            CollectionManager.isWhitelistedCollection(
-                contractAddress_
-            ),
+            CollectionManager.isWhitelistedCollection(contractAddress_),
             "Contract is not whitelisted"
         );
     }

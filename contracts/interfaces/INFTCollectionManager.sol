@@ -2,7 +2,7 @@
 pragma solidity ^0.8.0;
 
 interface INFTCollectionManager {
-  function setWhitelistedCollection(address, bool) external;
+  function addWhitelistedCollection(address, bool) external;
 
   function isWhitelistedCollection(address) external view returns (bool);
 

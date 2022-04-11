@@ -4,79 +4,55 @@ const {
   deployMinter,
   mint,
   deployMarketplace,
+  deploySalesService,
   deployManager,
-  deployMetaTxRelayer,
+  deployUniRouter,
   deployUniFactory,
-  deployERC20,
   deployWeth,
+  eth$,
 } = require("./helpers");
 
 const ADDR_0 = "0x0000000000000000000000000000000000000000";
-// Hardcoded Gas price in Ganache
-const GAS_PRICE = ethers.BigNumber.from("20000000000");
 
 describe("NFTMarketplace", () => {
-  let nftmarketplace;
-  let nftminter;
-  let nftcollectionmanager;
-  let metatxrelayer;
-  let owner, addr1, addr2, erc20, weth, unifactory, pairAddress;
+  let nftmarketplace,
+    nftminter,
+    salesservice,
+    unirouter,
+    unifactory,
+    weth,
+    manager;
+  let owner, addr1, addr2, forwarder;
   before(async () => {
-    [owner, addr1, addr2] = await ethers.getSigners();
+    [owner, addr1, addr2, forwarder] = await ethers.getSigners();
 
-    erc20 = await deployERC20();
     weth = await deployWeth();
     unifactory = await deployUniFactory(owner.address);
-    metatxrelayer = await deployMetaTxRelayer("Meta");
-
-    const transactionHash = await owner.sendTransaction({
-      to: addr1.address,
-      value: ethers.utils.parseEther("1.0"), // Sends exactly 1.0 ether
-    });
-
-    const txWeth = await weth
-      .connect(owner)
-      .deposit({ value: ethers.utils.parseEther("5.0") });
-    txWeth.wait();
-    const txErc20 = await erc20
-      .connect(owner)
-      .transfer(unifactory.address, ethers.utils.parseEther("2.0"));
-    txErc20.wait();
-    const txWeth2 = await weth
-      .connect(owner)
-      .transfer(unifactory.address, ethers.utils.parseEther("5.0"));
-    txWeth2.wait();
-    pairAddress = await unifactory.callStatic.createPair(
-      weth.address,
-      erc20.address
-    );
-    console.log(pairAddress);
-    const txPair = await unifactory.createPair(weth.address, erc20.address);
-    txPair.wait();
   });
 
   beforeEach(async () => {
-    nftcollectionmanager = await deployManager();
-    nftmarketplace = await deployMarketplace(
-      erc20.address,
-      pairAddress,
-      nftcollectionmanager.address
+    weth = await deployWeth();
+    manager = await deployManager();
+    unifactory = await deployUniFactory(owner.address);
+    unirouter = await deployUniRouter(unifactory.address, weth.address);
+    salesservice = await deploySalesService(
+      owner.address,
+      weth.address,
+      unirouter.address
     );
-    nftminter = await deployMinter("NFTMinter", "NM1", "", "", 1000, 1000);
-  });
 
-  describe("ERC20", function () {
-    it("Should return token price", async () => {
-      console.log(
-        await nftmarketplace.getTokenPrice(
-          pairAddress,
-          ethers.utils.parseEther("1")
-        )
-      );
-      await expect(
-        nftmarketplace.getTokenPrice(pairAddress, ethers.utils.parseEther("1"))
-      ).to.equal((1 * 5 * 10 ** 18) / 2);
-    });
+    nftmarketplace = await deployMarketplace(
+      manager.address,
+      salesservice.address,
+      forwarder.address
+    );
+
+    nftminter = await deployMinter("NFTMinter", "NM1", "", "", 1000, 1000);
+
+    const txAuthorize = await salesservice.addAuthorizedMarketplace(
+      nftmarketplace.address
+    );
+    txAuthorize.wait();
   });
 
   describe("ERC721Holder", function () {
@@ -100,44 +76,39 @@ describe("NFTMarketplace", () => {
       await expect(
         nftmarketplace
           .connect(addr1)
-          .createMarketItem(nftminter.address, 0, 10000)
+          .createMarketItem(nftminter.address, 0, eth$("1.0"))
       ).to.be.revertedWith("Pausable: paused");
     });
 
     it("Should revert if addr1 tries to create an MarketItem for a non whitelisted contract", async () => {
       await mint(nftminter, addr1.address, 1);
 
-      // user addr1 allows marketplace to operate in his behalf
       const tx2 = await nftminter
         .connect(addr1)
         .setApprovalForAll(nftmarketplace.address, true);
       tx2.wait();
 
-      // user creates MarketItem
       await expect(
         nftmarketplace
           .connect(addr1)
-          .createMarketItem(nftminter.address, 0, 10000)
+          .createMarketItem(nftminter.address, 0, eth$("1.0"))
       ).to.be.revertedWith("Contract is not whitelisted");
     });
 
     it("Should revert if addr1 tries to create a MarketItem with price 0", async () => {
       await mint(nftminter, addr1.address, 1);
 
-      // marketplace owner adds NFT contract as whitelisted
-      const tx = await nftcollectionmanager.isWhitelistedCollection(
+      const tx = await manager.addWhitelistedCollection(
         nftminter.address,
         true
       );
       tx.wait();
 
-      // user addr1 allows marketplace to operate in his behalf
       const tx2 = await nftminter
         .connect(addr1)
         .setApprovalForAll(nftmarketplace.address, true);
       tx2.wait();
 
-      // user creates MarketItem
       await expect(
         nftmarketplace.connect(addr1).createMarketItem(nftminter.address, 0, 0)
       ).to.be.revertedWith("Price must be at least 1 wei");
@@ -146,23 +117,20 @@ describe("NFTMarketplace", () => {
     it("Should pass if addr1 successfully creates a MarketItem", async () => {
       await mint(nftminter, addr1.address, 1);
 
-      // marketplace owner adds NFT contract as whitelisted
-      const tx = await nftcollectionmanager.isWhitelistedCollection(
+      const tx = await manager.addWhitelistedCollection(
         nftminter.address,
         true
       );
       tx.wait();
 
-      // user addr1 allows marketplace to operate in his behalf
       const tx2 = await nftminter
         .connect(addr1)
         .setApprovalForAll(nftmarketplace.address, true);
       tx2.wait();
 
-      // user creates MarketItem
       const tx3 = await nftmarketplace
         .connect(addr1)
-        .createMarketItem(nftminter.address, 0, 10000);
+        .createMarketItem(nftminter.address, 0, eth$("1.0"));
       tx3.wait();
 
       expect(
@@ -180,60 +148,56 @@ describe("NFTMarketplace", () => {
       await expect(
         nftmarketplace
           .connect(addr1)
-          .updateMarketItem(nftminter.address, 0, 10000)
+          .updateMarketItem(nftminter.address, 0, eth$("1.0"))
       ).to.be.revertedWith("Only seller allowed");
     });
+
     it("Should revert if addr1 tries to update a MarketItem with price 0", async () => {
       await mint(nftminter, addr1.address, 1);
 
-      // marketplace owner adds NFT contract as whitelisted
-      const tx = await nftcollectionmanager.setWhitelistedCollection(
+      const tx = await manager.addWhitelistedCollection(
         nftminter.address,
         true
       );
       tx.wait();
 
-      // user addr1 allows marketplace to operate in his behalf
       const tx2 = await nftminter
         .connect(addr1)
         .setApprovalForAll(nftmarketplace.address, true);
       tx2.wait();
 
-      // user creates MarketItem
       const tx3 = await nftmarketplace
         .connect(addr1)
-        .createMarketItem(nftminter.address, 0, 10000);
+        .createMarketItem(nftminter.address, 0, eth$("1.0"));
       tx3.wait();
 
       await expect(
         nftmarketplace.connect(addr1).updateMarketItem(nftminter.address, 0, 0)
       ).to.be.revertedWith("Price must be at least 1 wei");
     });
+
     it("Should pass if addr1 successfully updates a MarketItem", async () => {
       await mint(nftminter, addr1.address, 1);
 
-      // marketplace owner adds NFT contract as whitelisted
-      const tx = await nftcollectionmanager.setWhitelistedCollection(
+      const tx = await manager.addWhitelistedCollection(
         nftminter.address,
         true
       );
       tx.wait();
 
-      // user addr1 allows marketplace to operate in his behalf
       const tx2 = await nftminter
         .connect(addr1)
         .setApprovalForAll(nftmarketplace.address, true);
       tx2.wait();
 
-      // user creates MarketItem
       const tx3 = await nftmarketplace
         .connect(addr1)
-        .createMarketItem(nftminter.address, 0, 10000);
+        .createMarketItem(nftminter.address, 0, eth$("0.50"));
       tx3.wait();
 
       const tx4 = await nftmarketplace
         .connect(addr1)
-        .updateMarketItem(nftminter.address, 0, 20000);
+        .updateMarketItem(nftminter.address, 0, eth$("1.0"));
       tx4.wait();
 
       expect(
@@ -244,7 +208,7 @@ describe("NFTMarketplace", () => {
             0
           )
         ).price
-      ).to.equal(20000);
+      ).to.equal(eth$("1.0"));
     });
   });
 
@@ -252,26 +216,22 @@ describe("NFTMarketplace", () => {
     it("Should revert if addr2 tries to cancel a MarketItem of addr1", async () => {
       await mint(nftminter, addr1.address, 1);
 
-      // marketplace owner adds NFT contract as whitelisted
-      const tx = await nftcollectionmanager.setWhitelistedCollection(
+      const tx = await manager.addWhitelistedCollection(
         nftminter.address,
         true
       );
       tx.wait();
 
-      // user addr1 allows marketplace to operate in his behalf
       const tx2 = await nftminter
         .connect(addr1)
         .setApprovalForAll(nftmarketplace.address, true);
       tx2.wait();
 
-      // user creates MarketItem
       const tx3 = await nftmarketplace
         .connect(addr1)
         .createMarketItem(nftminter.address, 0, 10000);
       tx3.wait();
 
-      // user cancels MarketItem
       await expect(
         nftmarketplace.connect(addr2).cancelMarketItem(nftminter.address, 0)
       ).to.be.revertedWith("Only seller allowed");
@@ -280,26 +240,22 @@ describe("NFTMarketplace", () => {
     it("Should pass if addr1 successfully cancels a MarketItem", async () => {
       await mint(nftminter, addr1.address, 1);
 
-      // marketplace owner adds NFT contract as whitelisted
-      const tx = await nftcollectionmanager.setWhitelistedCollection(
+      const tx = await manager.addWhitelistedCollection(
         nftminter.address,
         true
       );
       tx.wait();
 
-      // user addr1 allows marketplace to operate in his behalf
       const tx2 = await nftminter
         .connect(addr1)
         .setApprovalForAll(nftmarketplace.address, true);
       tx2.wait();
 
-      // user creates MarketItem
       const tx3 = await nftmarketplace
         .connect(addr1)
-        .createMarketItem(nftminter.address, 0, 10000);
+        .createMarketItem(nftminter.address, 0, eth$("1.0"));
       tx3.wait();
 
-      // user cancels MarketItem
       const tx4 = await nftmarketplace
         .connect(addr1)
         .cancelMarketItem(nftminter.address, 0);
@@ -315,7 +271,7 @@ describe("NFTMarketplace", () => {
     });
   });
 
-  describe.only("buy", () => {
+  describe("buy", () => {
     it("Should revert if panic switch true", async () => {
       const txPanic = await nftmarketplace.setPanicSwitch(true);
       txPanic.wait();
@@ -323,67 +279,62 @@ describe("NFTMarketplace", () => {
       await expect(
         nftmarketplace
           .connect(addr1)
-          ["buy(address,uint256)"](nftminter.address, 0, { value: 10000 })
+          .buy(nftminter.address, 0, ADDR_0, 0, { value: eth$("1.0") })
       ).to.be.revertedWith("Pausable: paused");
     });
 
     it("Should revert if addr2 tries to buy with msg.value != price", async () => {
       await mint(nftminter, addr1.address, 1);
 
-      // marketplace owner adds NFT contract as whitelisted
-      const tx = await nftcollectionmanager.setWhitelistedCollection(
+      const tx = await manager.addWhitelistedCollection(
         nftminter.address,
         true
       );
       tx.wait();
 
-      // marketplace owner sets secondary sales fee to 10%
-      const txFee = await nftcollectionmanager.setFee(nftminter.address, 10);
+      const txFee = await manager.setFee(nftminter.address, 10);
       txFee.wait();
 
-      // user addr1 allows marketplace to operate in his behalf
       const tx2 = await nftminter
         .connect(addr1)
         .setApprovalForAll(nftmarketplace.address, true);
       tx2.wait();
 
-      // user creates MarketItem
       const tx3 = await nftmarketplace
         .connect(addr1)
-        .createMarketItem(nftminter.address, 0, 10000);
+        .createMarketItem(nftminter.address, 0, eth$("1.0"));
       tx3.wait();
 
       const options = {
-        value: 5000,
+        value: eth$("0.5"),
       };
       await expect(
         nftmarketplace
           .connect(addr2)
-          ["buy(address,uint256)"](nftminter.address, 0, options)
-      ).to.be.revertedWith("msg.value is not == Asking price");
+          .buy(nftminter.address, 0, ADDR_0, 0, options)
+      ).to.be.revertedWith("Not enough funds");
     });
 
-    it("Should revert if addr2 tries to buy a Market Item that is not for sale", async () => {
+    it("Should revert if addr2 tries to buy a MarketItem that is not for sale", async () => {
       await mint(nftminter, addr1.address, 1);
-      // marketplace owner adds NFT contract as whitelisted
-      const tx = await nftcollectionmanager.setWhitelistedCollection(
+
+      const tx = await manager.addWhitelistedCollection(
         nftminter.address,
         true
       );
       tx.wait();
 
-      // marketplace owner sets secondary sales fee to 10%
-      const txFee = await nftcollectionmanager.setFloorPrice(
+      const txFloorPrice = await manager.setFloorPrice(
         nftminter.address,
-        10000
+        eth$("1.0")
       );
-      txFee.wait();
+      txFloorPrice.wait();
 
       await expect(
         nftmarketplace
           .connect(addr2)
-          ["buy(address,uint256)"](nftminter.address, 0, {
-            value: 10000,
+          .buy(nftminter.address, 0, ADDR_0, 0, {
+            value: eth$("1.0"),
           })
       ).to.be.revertedWith("ERC721: transfer caller is not owner nor approved");
     });
@@ -391,334 +342,78 @@ describe("NFTMarketplace", () => {
     it("Should revert if addr1 tries to buy his own MarketItem", async () => {
       await mint(nftminter, addr1.address, 1);
 
-      // marketplace owner adds NFT contract as whitelisted
-      const tx = await nftcollectionmanager.setWhitelistedCollection(
+      const tx = await manager.addWhitelistedCollection(
         nftminter.address,
         true
       );
       tx.wait();
 
-      // marketplace owner sets secondary sales fee to 10%
-      const txFee = await nftcollectionmanager.setFee(nftminter.address, 10);
+      const txFee = await manager.setFee(nftminter.address, 10);
       txFee.wait();
 
-      // user addr1 allows marketplace to operate in his behalf
       const tx2 = await nftminter
         .connect(addr1)
         .setApprovalForAll(nftmarketplace.address, true);
       tx2.wait();
 
-      // user creates MarketItem
       const tx3 = await nftmarketplace
         .connect(addr1)
-        .createMarketItem(nftminter.address, 0, 10000);
+        .createMarketItem(nftminter.address, 0, eth$("1.0"));
       tx3.wait();
 
       const options = {
-        value: 10000,
+        value: eth$("1.0"),
       };
       await expect(
         nftmarketplace
           .connect(addr1)
-          ["buy(address,uint256)"](nftminter.address, 0, options)
+          .buy(nftminter.address, 0, ADDR_0, 0, options)
       ).to.be.revertedWith("Seller not allowed");
     });
 
     it("Should pass if addr2 successfully buys a MarketItem", async () => {
-      const provider = waffle.provider;
-
       await mint(nftminter, addr1.address, 1);
 
-      // marketplace owner adds NFT contract as whitelisted
-      const tx = await nftcollectionmanager.setWhitelistedCollection(
+      const tx = await manager.addWhitelistedCollection(
         nftminter.address,
         true
       );
       tx.wait();
 
-      // marketplace owner sets secondary sales fee to 10%
-      const txFee = await nftcollectionmanager.setFee(nftminter.address, 10);
+      const txFee = await manager.setFee(nftminter.address, 10);
       txFee.wait();
 
-      // user addr1 allows marketplace to operate in his behalf
       const tx2 = await nftminter
         .connect(addr1)
         .setApprovalForAll(nftmarketplace.address, true);
       tx2.wait();
 
-      const price = 10000;
-
-      // user creates MarketItem
+      const price = eth$("1.0");
       const tx3 = await nftmarketplace
         .connect(addr1)
         .createMarketItem(nftminter.address, 0, price);
       tx3.wait();
 
-      const [addr1BalanceBefore] = await nftmarketplace.getUserPendingRevenue(
-        addr1.address
-      );
-      const nftmarketplaceBalanceBefore = await provider.getBalance(
-        nftmarketplace.address
-      );
-
       const options = {
         value: price,
       };
-      // user buys market item
+
       const tx4 = await nftmarketplace
         .connect(addr2)
-        ["buy(address,uint256)"](nftminter.address, 0, options);
+        .buy(nftminter.address, 0, ADDR_0, 0, options);
       tx4.wait();
 
-      const [addr1BalanceAfter] = await nftmarketplace.getUserPendingRevenue(
-        addr1.address
-      );
-      const nftmarketplaceBalanceAfter = await provider.getBalance(
-        nftmarketplace.address
-      );
+      // enumeration
+      expect(await nftmarketplace.getUserItemsCount(addr1.address, nftminter.address)).to.equal(0);
+      expect(await nftmarketplace.getAllItemsCount(nftminter.address)).to.equal(0);
 
-      // calculating secondary sales fee
-      const fee =
-        ((await nftcollectionmanager.getFee(nftminter.address)) * price) / 100;
-      const payment = price - fee;
-
-      // checking that transfer was successful
+      // ownership
       expect(await nftminter.ownerOf(0)).to.equal(addr2.address);
-      // checking that payment was correct
-      expect(addr1BalanceAfter).to.equal(addr1BalanceBefore.add(payment));
-      expect(nftmarketplaceBalanceAfter).to.equal(
-        nftmarketplaceBalanceBefore.add(price)
-      );
-    });
-  });
 
-  describe("buyWithERC20", () => {
-    it("Should revert if panic switch true", async () => {
-      const txPanic = await nftmarketplace.setPanicSwitch(true);
-      txPanic.wait();
-
-      await expect(
-        nftmarketplace.connect(addr1).buyWithERC20(nftminter.address, 0, 10000)
-      ).to.be.revertedWith("Pausable: paused");
-    });
-
-    it("Should revert if addr2 tries to buy with amount != price", async () => {
-      await mint(nftminter, addr1.address, 1);
-
-      // marketplace owner adds NFT contract as whitelisted
-      const tx = await nftcollectionmanager.setWhitelistedCollection(
-        nftminter.address,
-        true
-      );
-      tx.wait();
-
-      // marketplace owner sets secondary sales fee to 10%
-      const txFee = await nftcollectionmanager.setFee(nftminter.address, 10);
-      txFee.wait();
-
-      // user addr1 allows marketplace to operate in his behalf
-      const tx2 = await nftminter
-        .connect(addr1)
-        .setApprovalForAll(nftmarketplace.address, true);
-      tx2.wait();
-
-      // user creates MarketItem
-      const tx3 = await nftmarketplace
-        .connect(addr1)
-        .createMarketItem(nftminter.address, 0, 10000);
-      tx3.wait();
-
-      await expect(
-        nftmarketplace.connect(addr2).buyWithERC20(nftminter.address, 0, 10000)
-      ).to.be.revertedWith("Price doesn't match item price");
-    });
-
-    it("Should revert if addr2 tries to buy a Market Item that is not for sale", async () => {
-      await mint(nftminter, addr1.address, 1);
-      // marketplace owner adds NFT contract as whitelisted
-      const tx = await nftcollectionmanager.setWhitelistedCollection(
-        nftminter.address,
-        true
-      );
-      tx.wait();
-
-      // marketplace owner sets secondary sales fee to 10%
-      const txFee = await nftcollectionmanager.setFloorPrice(
-        nftminter.address,
-        10000
-      );
-      txFee.wait();
-
-      await expect(
-        nftmarketplace.connect(addr2).buyWithERC20(nftminter.address, 0, 10000)
-      ).to.be.revertedWith("ERC721: transfer caller is not owner nor approved");
-    });
-
-    it("Should revert if addr1 tries to buy his own MarketItem", async () => {
-      await mint(nftminter, addr1.address, 1);
-
-      // marketplace owner adds NFT contract as whitelisted
-      const tx = await nftcollectionmanager.setWhitelistedCollection(
-        nftminter.address,
-        true
-      );
-      tx.wait();
-
-      // marketplace owner sets secondary sales fee to 10%
-      const txFee = await nftcollectionmanager.setFee(nftminter.address, 10);
-      txFee.wait();
-
-      // user addr1 allows marketplace to operate in his behalf
-      const tx2 = await nftminter
-        .connect(addr1)
-        .setApprovalForAll(nftmarketplace.address, true);
-      tx2.wait();
-
-      // user creates MarketItem
-      const tx3 = await nftmarketplace
-        .connect(addr1)
-        .createMarketItem(nftminter.address, 0, 10000);
-      tx3.wait();
-
-      await expect(
-        nftmarketplace.connect(addr1).buyWithERC20(nftminter.address, 0, 10000)
-      ).to.be.revertedWith("Seller not allowed");
-    });
-
-    it("Should pass if addr2 successfully buys a MarketItem", async () => {
-      const provider = waffle.provider;
-
-      await mint(nftminter, addr1.address, 1);
-
-      // marketplace owner adds NFT contract as whitelisted
-      const tx = await nftcollectionmanager.setWhitelistedCollection(
-        nftminter.address,
-        true
-      );
-      tx.wait();
-
-      // marketplace owner sets secondary sales fee to 10%
-      const txFee = await nftcollectionmanager.setFee(nftminter.address, 10);
-      txFee.wait();
-
-      // user addr1 allows marketplace to operate in his behalf
-      const tx2 = await nftminter
-        .connect(addr1)
-        .setApprovalForAll(nftmarketplace.address, true);
-      tx2.wait();
-
-      const price = 10000;
-
-      // user creates MarketItem
-      const tx3 = await nftmarketplace
-        .connect(addr1)
-        .createMarketItem(nftminter.address, 0, price);
-      tx3.wait();
-
-      const [addr1BalanceBefore] = await nftmarketplace.getUserPendingRevenue(
-        addr1.address
-      );
-      const nftmarketplaceBalanceBefore = await provider.getBalance(
-        nftmarketplace.address
-      );
-
-      const options = {
-        value: price,
-      };
-      // user buys market item
-      const tx4 = await nftmarketplace
-        .connect(addr2)
-        .buyWithERC20(nftminter.address, 0, 10000);
-      tx4.wait();
-
-      const [addr1BalanceAfter] = await nftmarketplace.getUserPendingRevenue(
-        addr1.address
-      );
-      const nftmarketplaceBalanceAfter = await provider.getBalance(
-        nftmarketplace.address
-      );
-
-      // calculating secondary sales fee
-      const fee =
-        ((await nftcollectionmanager.getFee(nftminter.address)) * price) / 100;
-      const payment = price - fee;
-
-      // checking that transfer was successful
-      expect(await nftminter.ownerOf(0)).to.equal(addr2.address);
-      // checking that payment was correct
-      expect(addr1BalanceAfter).to.equal(addr1BalanceBefore.add(payment));
-      expect(nftmarketplaceBalanceAfter).to.equal(
-        nftmarketplaceBalanceBefore.add(price)
-      );
-    });
-  });
-
-  describe("transferSalesFees", () => {
-    it("Should revert if transferSalesFees is not called by owner", async () => {
-      await expect(
-        nftmarketplace.connect(addr1).transferSalesFees()
-      ).to.be.revertedWith("Ownable: caller is not the owner");
-    });
-
-    it("Should pass if sales fees are ok and get successfully transferred to owner", async () => {
-      const [owner, addr1, addr2] = await ethers.getSigners();
-
-      const provider = waffle.provider;
-
-      await mint(nftminter, addr1.address, 2);
-
-      // marketplace owner adds NFT contract as whitelisted
-      const tx = await nftcollectionmanager.isWhitelistedCollection(
-        nftminter.address,
-        true
-      );
-      tx.wait();
-
-      // marketplace owner sets fee
-      const txFee = await nftcollectionmanager.setFee(nftminter.address, 10);
-      txFee.wait();
-
-      // user addr1 allows marketplace to operate in his behalf
-      const tx2 = await nftminter
-        .connect(addr1)
-        .setApprovalForAll(nftmarketplace.address, true);
-      tx2.wait();
-
-      const price = 1000000;
-      const fee =
-        ((await nftcollectionmanager.getFee(nftminter.address)) * price) / 100;
-
-      // user creates MarketItem
-      const tx3 = await nftmarketplace
-        .connect(addr1)
-        .createMarketItem(nftminter.address, 0, price);
-      tx3.wait();
-
-      // user buys MarketItem
-      const options = {
-        value: price,
-      };
-      const tx4 = await nftmarketplace
-        .connect(addr2)
-        ["buy(address,uint256)"](nftminter.address, 0, options);
-      tx4.wait();
-
-      const ownerBalanceBefore = await provider.getBalance(owner.address);
-
-      // owner transfer sales fees
-      const txTransferSalesFees = await nftmarketplace.transferSalesFees();
-      txTransferSalesFees.wait();
-
-      const gasUsed = (
-        await provider.getTransactionReceipt(txTransferSalesFees.hash)
-      ).gasUsed;
-      const gasFee = gasUsed.mul(GAS_PRICE);
-
-      const ownerBalanceAfter = await provider.getBalance(owner.address);
-
-      expect(ownerBalanceAfter).to.be.equal(
-        ownerBalanceBefore.sub(gasFee).add(fee)
-      );
+      const fee = price.mul(await manager.getFee(nftminter.address)).div(100);
+      // payment
+      expect(await salesservice.getPendingRevenue(addr1.address)).to.equal(price.sub(fee));
+      expect(await salesservice.getPendingRevenue(owner.address)).to.equal(fee);
     });
   });
 
@@ -727,7 +422,7 @@ describe("NFTMarketplace", () => {
       const qty = 3;
       await mint(nftminter, addr1.address, qty);
 
-      const txWhitelist = await nftcollectionmanager.isWhitelistedCollection(
+      const txWhitelist = await manager.addWhitelistedCollection(
         nftminter.address,
         true
       );
@@ -738,11 +433,11 @@ describe("NFTMarketplace", () => {
         .setApprovalForAll(nftmarketplace.address, true);
       txApprove.wait();
 
-      const price = 1000;
+      const price = eth$("1.0");
       for (let i = 0; i < qty; i++) {
         const txCreate = await nftmarketplace
           .connect(addr1)
-          .createMarketItem(nftminter.address, i, price + i);
+          .createMarketItem(nftminter.address, i, price.add(i));
         txCreate.wait();
       }
 
@@ -763,7 +458,7 @@ describe("NFTMarketplace", () => {
 
       userItems.forEach((it, i) => {
         expect(it.seller).to.equal(addr1.address);
-        expect(it.price).to.equal(price + i);
+        expect(it.price).to.equal(price.add(i));
       });
     });
 
@@ -772,7 +467,7 @@ describe("NFTMarketplace", () => {
       await mint(nftminter, addr1.address, qty);
       await mint(nftminter, addr2.address, qty);
 
-      const txWhitelist = await nftcollectionmanager.isWhitelistedCollection(
+      const txWhitelist = await manager.addWhitelistedCollection(
         nftminter.address,
         true
       );
@@ -788,19 +483,19 @@ describe("NFTMarketplace", () => {
         .setApprovalForAll(nftmarketplace.address, true);
       txApprove2.wait();
 
-      const price = 1000;
+      const price = eth$("1.0");
       for (let i = 0; i < qty; i++) {
         const txCreate = await nftmarketplace
           .connect(addr1)
-          .createMarketItem(nftminter.address, i, price + i);
+          .createMarketItem(nftminter.address, i, price.add(i));
         txCreate.wait();
       }
 
-      const price2 = 2000;
+      const price2 = eth$("2.0");
       for (let i = 2; i < qty + 2; i++) {
         const txCreate = await nftmarketplace
           .connect(addr2)
-          .createMarketItem(nftminter.address, i, price2 + i);
+          .createMarketItem(nftminter.address, i, price2.add(i));
         txCreate.wait();
       }
 
@@ -816,11 +511,11 @@ describe("NFTMarketplace", () => {
 
       for (let i = 0; i < qty; i++) {
         expect(allItems[i].seller).to.equal(addr1.address);
-        expect(allItems[i].price).to.equal(price + i);
+        expect(allItems[i].price).to.equal(price.add(i));
       }
       for (let i = 2; i < qty + 2; i++) {
         expect(allItems[i].seller).to.equal(addr2.address);
-        expect(allItems[i].price).to.equal(price2 + i);
+        expect(allItems[i].price).to.equal(price2.add(i));
       }
     });
   });

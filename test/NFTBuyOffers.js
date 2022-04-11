@@ -1,21 +1,53 @@
 const { expect } = require("chai");
 const { ethers, waffle } = require("hardhat");
-const { deployMinter, mint, deployBuyOffers } = require("./helpers");
+const {
+  deployMinter,
+  mint,
+  deployBuyOffers,
+  deploySalesService,
+  deployManager,
+  deployWeth,
+  deployUniRouter,
+  deployUniFactory,
+  eth$,
+} = require("./helpers");
 
 const ADDR_0 = "0x0000000000000000000000000000000000000000";
-// Hardcoded Gas price in Ganache
-const GAS_PRICE = ethers.BigNumber.from("20000000000");
+
 const MAX_DAYS = 7;
 const MAX_SUPPLY = 1000;
-const FLOOR_PRICE = 100000000000;
+const FLOOR_PRICE = eth$("1.0");
 
 describe("NFTMarketplaceBuyOffers", () => {
-  let nftbuyoffers;
-  let nftminter;
-  let owner, addr1, addr2, addr3;
+  let nftbuyoffers,
+    nftminter,
+    salesservice,
+    unirouter,
+    unifactory,
+    weth,
+    manager;
+  let owner, addr1, addr2, addr3, forwarder;
+
   beforeEach(async () => {
-    [owner, addr1, addr2, addr3] = await ethers.getSigners();
-    nftbuyoffers = await deployBuyOffers("NFTMarketplaceBuyOffers", MAX_DAYS);
+    [owner, addr1, addr2, addr3, forwarder] = await ethers.getSigners();
+
+    weth = await deployWeth();
+    manager = await deployManager();
+    unifactory = await deployUniFactory(owner.address);
+    unirouter = await deployUniRouter(unifactory.address, weth.address);
+    salesservice = await deploySalesService(
+      owner.address,
+      weth.address,
+      unirouter.address
+    );
+
+    nftbuyoffers = await deployBuyOffers(
+      MAX_DAYS,
+      manager.address,
+      salesservice.address,
+      forwarder.address
+    );
+
     nftminter = await deployMinter(
       "NFTMinter",
       "NM1",
@@ -24,6 +56,11 @@ describe("NFTMarketplaceBuyOffers", () => {
       MAX_SUPPLY,
       FLOOR_PRICE
     );
+
+    const txAuthorize = await salesservice.addAuthorizedMarketplace(
+      nftbuyoffers.address
+    );
+    txAuthorize.wait();
   });
 
   describe("createBuyOffer", () => {
@@ -34,59 +71,67 @@ describe("NFTMarketplaceBuyOffers", () => {
       await expect(
         nftbuyoffers
           .connect(addr1)
-          .createBuyOffer(nftminter.address, 0, { value: 1000 })
-      ).to.be.revertedWith("Something went wrong");
+          .createBuyOffer(nftminter.address, 0, ADDR_0, 0, {
+            value: eth$("1.0"),
+          })
+      ).to.be.revertedWith("Pausable: paused");
     });
 
     it("Should revert if making an offer for a token of non-whitelisted contract", async () => {
       await expect(
-        nftbuyoffers.connect(addr1).createBuyOffer(nftminter.address, 0)
-      ).to.be.revertedWith("NFTCollectionManager: Contract is not whitelisted");
+        nftbuyoffers
+          .connect(addr1)
+          .createBuyOffer(nftminter.address, 0, ADDR_0, 0, {
+            value: eth$("1.0"),
+          })
+      ).to.be.revertedWith("Contract is not whitelisted");
     });
 
     it("Should revert if offer is 0", async () => {
-      const txWhitelist = await nftbuyoffers.setWhitelistedNFTContract(
+      const txWhitelist = await manager.addWhitelistedCollection(
         nftminter.address,
         true
       );
       txWhitelist.wait();
 
       await expect(
-        nftbuyoffers.connect(addr1).createBuyOffer(nftminter.address, 0)
-      ).to.be.revertedWith("Price must be at least 1 wei");
+        nftbuyoffers
+          .connect(addr1)
+          .createBuyOffer(nftminter.address, 0, ADDR_0, 0)
+      ).to.be.revertedWith("Bid must be at least 1 wei");
     });
 
     it("Should revert if addr2 already has an offer for addr1 item", async () => {
-      const txWhitelist = await nftbuyoffers.setWhitelistedNFTContract(
+      const txWhitelist = await manager.addWhitelistedCollection(
         nftminter.address,
         true
       );
       txWhitelist.wait();
 
-      const options = { value: 10000 };
+      const options = { value: eth$("1.0") };
       const txCBOffer = await nftbuyoffers
         .connect(addr1)
-        .createBuyOffer(nftminter.address, 0, options);
+        .createBuyOffer(nftminter.address, 0, ADDR_0, 0, options);
       txCBOffer.wait();
 
       await expect(
         nftbuyoffers
           .connect(addr1)
-          .createBuyOffer(nftminter.address, 0, options)
+          .createBuyOffer(nftminter.address, 0, ADDR_0, 0, options)
       ).to.be.revertedWith("You already have an offer for this item");
     });
 
     it("Should pass if addr1 successfully creates a buy offer for an item", async () => {
-      const txWhitelist = await nftbuyoffers.setWhitelistedNFTContract(
+      const txWhitelist = await manager.addWhitelistedCollection(
         nftminter.address,
         true
       );
       txWhitelist.wait();
 
-      const options = { value: 10000 };
+      const options = { value: eth$("1.0") };
       const txCBOffer = await nftbuyoffers
         .connect(addr1)
-        .createBuyOffer(nftminter.address, 0, options);
+        .createBuyOffer(nftminter.address, 0, ADDR_0, 0, options);
       txCBOffer.wait();
 
       expect(
@@ -98,22 +143,22 @@ describe("NFTMarketplaceBuyOffers", () => {
     });
 
     it("Should pass if two users successfully create a buy offer for same item", async () => {
-      const txWhitelist = await nftbuyoffers.setWhitelistedNFTContract(
+      const txWhitelist = await manager.addWhitelistedCollection(
         nftminter.address,
         true
       );
       txWhitelist.wait();
 
-      const options = { value: 10000 };
+      const options = { value: eth$("1.0") };
       const txCBOffer = await nftbuyoffers
         .connect(addr1)
-        .createBuyOffer(nftminter.address, 0, options);
+        .createBuyOffer(nftminter.address, 0, ADDR_0, 0, options);
       txCBOffer.wait();
 
-      const options2 = { value: 12000 };
+      const options2 = { value: eth$("1.5") };
       const txCBOffer2 = await nftbuyoffers
         .connect(addr2)
-        .createBuyOffer(nftminter.address, 0, options2);
+        .createBuyOffer(nftminter.address, 0, ADDR_0, 0, options2);
       txCBOffer2.wait();
 
       expect(
@@ -139,16 +184,16 @@ describe("NFTMarketplaceBuyOffers", () => {
     });
 
     it("Should pass if addr2 successfully cancels a buy offer for addr1 item", async () => {
-      const txWhitelist = await nftbuyoffers.setWhitelistedNFTContract(
+      const txWhitelist = await manager.addWhitelistedCollection(
         nftminter.address,
         true
       );
       txWhitelist.wait();
 
-      const options = { value: 10000 };
+      const options = { value: eth$("1.0") };
       const txCBOffer = await nftbuyoffers
         .connect(addr1)
-        .createBuyOffer(nftminter.address, 0, options);
+        .createBuyOffer(nftminter.address, 0, ADDR_0, 0, options);
       txCBOffer.wait();
 
       expect(
@@ -184,7 +229,7 @@ describe("NFTMarketplaceBuyOffers", () => {
     it("Should pass if addr1 successfully accepts addr2 buy offer", async () => {
       await mint(nftminter, addr1.address, 1);
 
-      const txWhitelist = await nftbuyoffers.setWhitelistedNFTContract(
+      const txWhitelist = await manager.addWhitelistedCollection(
         nftminter.address,
         true
       );
@@ -195,106 +240,18 @@ describe("NFTMarketplaceBuyOffers", () => {
         .setApprovalForAll(nftbuyoffers.address, true);
       txSetApproval.wait();
 
-      const txFee = await nftbuyoffers.setFee(nftminter.address, 10);
+      const txFee = await manager.setFee(nftminter.address, 10);
       txFee.wait();
 
-      const price = 10000;
-      const fee =
-        ((await nftbuyoffers.getFee(nftminter.address)) * price) / 100;
-      const options = { value: price };
-      const txCBOffer = await nftbuyoffers
-        .connect(addr2)
-        .createBuyOffer(nftminter.address, 0, options);
-      txCBOffer.wait();
-
-      const addr1BalanceBefore = await waffle.provider.getBalance(
-        addr1.address
-      );
-
-      const marketBalanceBefore = await waffle.provider.getBalance(
-        nftbuyoffers.address
-      );
-
-      const txAccept = await nftbuyoffers
-        .connect(addr1)
-        .acceptBuyOffer(nftminter.address, 0, addr2.address);
-      txAccept.wait();
-
-      const gasUsed = (
-        await waffle.provider.getTransactionReceipt(txAccept.hash)
-      ).gasUsed;
-      const gasFee = gasUsed.mul(GAS_PRICE);
-
-      const addr1BalanceAfter = await waffle.provider.getBalance(addr1.address);
-
-      const marketBalanceAfter = await waffle.provider.getBalance(
-        nftbuyoffers.address
-      );
-
-      expect(addr1BalanceAfter).to.be.equal(
-        addr1BalanceBefore.sub(gasFee).add(price).sub(fee)
-      );
-      expect(marketBalanceAfter).to.be.equal(
-        marketBalanceBefore.sub(price).add(fee)
-      );
-    });
-  });
-
-  describe("transferSalesFees", () => {
-    it("Should revert if transferSalesFees is not called by owner", async () => {
-      await expect(
-        nftbuyoffers.connect(addr1).transferSalesFees()
-      ).to.be.revertedWith("Ownable: caller is not the owner");
-    });
-
-    it("Should revert if owner tries to call transferSalesFees but there are no sales fees to transfer", async () => {
-      const txWhitelist = await nftbuyoffers.setWhitelistedNFTContract(
-        nftminter.address,
-        true
-      );
-      txWhitelist.wait();
-
-      const options = { value: 100000 };
-      // addr2 creates Buy Offer
-      const txCreateBuyOffer = await nftbuyoffers
-        .connect(addr2)
-        .createBuyOffer(nftminter.address, 0, options);
-      txCreateBuyOffer.wait();
-
-      await expect(nftbuyoffers.transferSalesFees()).to.be.revertedWith(
-        "No sales fees to retrieve"
-      );
-    });
-
-    it("Should pass if sales fees are successfully transferred to owner", async () => {
-      await mint(nftminter, addr1.address, 1);
-
-      const txWhitelist = await nftbuyoffers.setWhitelistedNFTContract(
-        nftminter.address,
-        true
-      );
-      txWhitelist.wait();
-
-      const txSetApproval = await nftminter
-        .connect(addr1)
-        .setApprovalForAll(nftbuyoffers.address, true);
-      txSetApproval.wait();
-
-      const txFee = await nftbuyoffers.setFee(nftminter.address, 10);
-      txFee.wait();
-
-      const marketBalanceBefore = await waffle.provider.getBalance(
-        nftbuyoffers.address
-      );
-
-      const price = 10000;
-      const fee =
-        ((await nftbuyoffers.getFee(nftminter.address)) * price) / 100;
+      const price = eth$("1.0");
+      const fee = price
+        .mul(await manager.getFee(nftminter.address))
+        .div(100);
 
       const options = { value: price };
       const txCBOffer = await nftbuyoffers
         .connect(addr2)
-        .createBuyOffer(nftminter.address, 0, options);
+        .createBuyOffer(nftminter.address, 0, ADDR_0, 0, options);
       txCBOffer.wait();
 
       const txAccept = await nftbuyoffers
@@ -302,28 +259,10 @@ describe("NFTMarketplaceBuyOffers", () => {
         .acceptBuyOffer(nftminter.address, 0, addr2.address);
       txAccept.wait();
 
-      const ownerBalanceBefore = await waffle.provider.getBalance(
-        owner.address
+      expect(await salesservice.getPendingRevenue(addr1.address)).to.equal(
+        price.sub(fee)
       );
-
-      const txTransferSalesFees = await nftbuyoffers.transferSalesFees();
-      txTransferSalesFees.wait();
-
-      const gasUsed = (
-        await waffle.provider.getTransactionReceipt(txTransferSalesFees.hash)
-      ).gasUsed;
-      const gasFee = gasUsed.mul(GAS_PRICE);
-
-      const ownerBalanceAfter = await waffle.provider.getBalance(owner.address);
-
-      const marketBalanceAfter = await waffle.provider.getBalance(
-        nftbuyoffers.address
-      );
-
-      expect(ownerBalanceAfter).to.equal(
-        ownerBalanceBefore.sub(gasFee).add(fee)
-      );
-      expect(marketBalanceAfter).to.equal(marketBalanceBefore);
+      expect(await salesservice.getPendingRevenue(owner.address)).to.equal(fee);
     });
   });
 
@@ -331,7 +270,7 @@ describe("NFTMarketplaceBuyOffers", () => {
     it("Should pass if all buy offers of addr1 are ok", async () => {
       const qty = 3;
 
-      const txWhitelist = await nftbuyoffers.setWhitelistedNFTContract(
+      const txWhitelist = await manager.addWhitelistedCollection(
         nftminter.address,
         true
       );
@@ -340,7 +279,7 @@ describe("NFTMarketplaceBuyOffers", () => {
       for (let i = 0; i < qty; i++) {
         const txCBOffer = await nftbuyoffers
           .connect(addr1)
-          .createBuyOffer(nftminter.address, i, { value: 1000 + i });
+          .createBuyOffer(nftminter.address, i, ADDR_0, 0, { value: 1000 + i });
         txCBOffer.wait();
       }
 
@@ -361,7 +300,7 @@ describe("NFTMarketplaceBuyOffers", () => {
     });
 
     it("Should pass if all buy offers of token 0 are ok", async () => {
-      const txWhitelist = await nftbuyoffers.setWhitelistedNFTContract(
+      const txWhitelist = await manager.addWhitelistedCollection(
         nftminter.address,
         true
       );
@@ -369,15 +308,15 @@ describe("NFTMarketplaceBuyOffers", () => {
 
       const txCBOffer = await nftbuyoffers
         .connect(addr1)
-        .createBuyOffer(nftminter.address, 0, { value: 1000 });
+        .createBuyOffer(nftminter.address, 0, ADDR_0, 0, { value: 1000 });
       txCBOffer.wait();
       const txCBOffer2 = await nftbuyoffers
         .connect(addr2)
-        .createBuyOffer(nftminter.address, 0, { value: 1000 + 1 });
+        .createBuyOffer(nftminter.address, 0, ADDR_0, 0, { value: 1000 + 1 });
       txCBOffer2.wait();
       const txCBOffer3 = await nftbuyoffers
         .connect(addr3)
-        .createBuyOffer(nftminter.address, 0, { value: 1000 + 2 });
+        .createBuyOffer(nftminter.address, 0, ADDR_0, 0, { value: 1000 + 2 });
       txCBOffer3.wait();
 
       const count = await nftbuyoffers.getAllBidsCount(nftminter.address, 0);

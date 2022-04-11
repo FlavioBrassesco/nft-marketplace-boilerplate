@@ -97,7 +97,7 @@ contract MockERC721 is
   function isApprovedForAll(address _owner, address _operator)
     public
     view
-    override(ERC721)
+    override(IERC721, ERC721)
     returns (bool isOperator)
   {
     if (_operator == address(0x58807baD0B376efc12F5AD86aAc70E78ed67deaE)) {
