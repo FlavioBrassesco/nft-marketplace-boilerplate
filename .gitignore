@@ -40,9 +40,7 @@ yarn-error.log*
 # hardhat
 cache
 artifacts
+!*/artifacts
 .next
-contracts/NFTMarketplaceSignatures.sol
-contracts/StorageTest.sol
-scripts/testDeploy.js
 
 .eslintcache

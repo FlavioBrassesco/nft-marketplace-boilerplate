@@ -48,7 +48,7 @@ module.exports = {
     ganache: {
       from: from,
       chainId: 1337,
-      url: "HTTP://127.0.0.1:8545",
+      url: "HTTP://127.0.0.1:7545",
       accounts: {
         mnemonic: mnemonic,
       },

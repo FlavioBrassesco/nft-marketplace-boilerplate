@@ -19,26 +19,36 @@
     "r:ether": "ganache-cli --defaultBalanceEther 10000"
   },
   "dependencies": {
+    "@emotion/react": "^11.9.0",
+    "@emotion/server": "^11.4.0",
+    "@emotion/styled": "^11.8.1",
+    "@mui/material": "^5.6.4",
     "@nomiclabs/hardhat-ethers": "^2.0.3",
     "@nomiclabs/hardhat-etherscan": "^2.1.8",
     "@nomiclabs/hardhat-waffle": "^2.0.1",
     "@openzeppelin/contracts": "^4.5.0",
     "@uniswap/v2-core": "^1.0.1",
     "axios": "^0.24.0",
-    "chai": "^4.3.4",
+    "crypto-js": "^4.1.1",
     "ethereum-waffle": "^3.4.0",
     "ethers": "^5.5.2",
     "ethers-eip712": "^0.2.0",
     "hardhat": "^2.8.0",
     "ipfs-http-client": "^55.0.0",
+    "modern-normalize": "^1.1.0",
+    "mongoose": "^6.3.1",
     "next": "12.0.7",
     "react": "17.0.2",
     "react-dom": "17.0.2",
+    "react-icons": "^4.3.1",
+    "styled-components": "^5.3.5",
     "web3modal": "^1.9.4"
   },
   "devDependencies": {
+    "@svgr/webpack": "^6.2.1",
     "@uniswap/v2-periphery": "^1.1.0-beta.0",
     "autoprefixer": "^10.4.1",
+    "chai": "^4.3.4",
     "dotenv": "^10.0.0",
     "eslint": "^7.32.0",
     "eslint-config-next": "12.0.7",
@@ -57,8 +67,7 @@
     "prettier": "^2.5.1",
     "prettier-plugin-solidity": "^1.0.0-beta.19",
     "solhint": "^3.3.6",
-    "solhint-plugin-prettier": "^0.0.5",
-    "tailwindcss": "^3.0.8"
+    "solhint-plugin-prettier": "^0.0.5"
   },
   "lint-staged": {
     "*.js": "eslint --cache --fix",

@@ -4,15 +4,14 @@ const hre = require("hardhat");
 const NUM_ITEMS = 5;
 const BASE = 1;
 const OWNER_ADDRESS = process.env.OWNER_ADDRESS;
-const CONTRACT_ADDRESS = process.env.MINTER_ADDRESS;
-const METADATA_URI = process.env.METADATA_URI;
+const CONTRACT_ADDRESS = "0x7F81f40E5a74738F9B8116066Cf2Cf563734c840";
 
 async function main() {
-  const NFTMinter = await hre.ethers.getContractFactory("NFTMinter");
+  const NFTMinter = await hre.ethers.getContractFactory("MockERC721");
   const nftminter = await NFTMinter.attach(CONTRACT_ADDRESS);
 
-  for (var i = BASE; i < BASE + NUM_ITEMS; i++) {
-    await nftminter.mintItem(OWNER_ADDRESS, `${METADATA_URI}/${i}.json`);
+  for (let i = BASE; i < BASE + NUM_ITEMS; i++) {
+    await nftminter.mint(OWNER_ADDRESS, `${i}.json`);
   }
 }
 
