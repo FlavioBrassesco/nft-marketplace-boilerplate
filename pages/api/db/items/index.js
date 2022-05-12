@@ -1,7 +1,7 @@
-import connectDB from "../../../middleware/connectDB";
-import connectEthers from "../../../middleware/connectEthers";
-import Item from "../../../models/Item";
-const { abi } = require("../../../services/blockchain/abi/erc721.json");
+import connectDB from "@middleware/connectDB";
+import connectEthers from "@middleware/connectEthers";
+import Item from "@services/database/models/Item";
+const { abi } = require("@services/blockchain/abi/erc721.json");
 
 const handler = async function (req, res) {
   if (req.method === "GET") {

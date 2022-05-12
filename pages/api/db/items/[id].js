@@ -1,5 +1,5 @@
-import connectDB from "../../../middleware/connectDB";
-import Item from "../../../models/Item";
+import connectDB from "@middleware/connectDB";
+import Item from "@services/database/models/Item";
 
 const handler = async function (req, res) {
   const { id } = req.query;

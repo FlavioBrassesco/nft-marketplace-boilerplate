@@ -9,9 +9,9 @@ import {
   FormControl,
   MenuItem,
 } from "@mui/material";
-import { StatusSelectToggle } from "../../components/StatusSelect";
-import TraitChips from "../../components/TraitChips";
-import ItemCard from "../../components/ItemCard";
+import { StatusSelectToggle } from "@components/StatusSelect";
+import TraitChips from "@components/TraitChips";
+import ItemCard from "@components/ItemCard";
 
 import { traits, data } from "../data";
 

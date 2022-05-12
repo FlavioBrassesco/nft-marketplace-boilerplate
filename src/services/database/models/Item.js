@@ -1,7 +1,7 @@
 const mongoose = require("mongoose");
 
 const itemSchema = new mongoose.Schema({
-  collection: {
+  address: {
     type: String,
     required: true,
     minlength: 42,

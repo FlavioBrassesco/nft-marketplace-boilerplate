@@ -1,10 +1,10 @@
 import { useState } from "react";
-import CollectionSelect from "../components/CollectionSelect";
-import { StatusSelect } from "../components/StatusSelect";
-import StatusPrice from "../components/StatusPrice";
-import StatusDays from "../components/StatusDays";
+import CollectionSelect from "@components/CollectionSelect";
+import { StatusSelect } from "@components/StatusSelect";
+import StatusPrice from "@components/StatusPrice";
+import StatusDays from "@components/StatusDays";
 import { ethers } from "ethers";
-import ItemCard from "../components/ItemCard";
+import ItemCard from "@components/ItemCard";
 
 import {
   Grid,

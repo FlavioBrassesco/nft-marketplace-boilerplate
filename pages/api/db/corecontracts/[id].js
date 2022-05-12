@@ -1,5 +1,5 @@
-import connectDB from "../../../../middleware/connectDB";
-import CoreContract from "../../../../models/CoreContract";
+import connectDB from "@middleware/connectDB";
+import CoreContract from "@services/database/models/CoreContract";
 
 const handler = async function (req, res) {
   const { id } = req.query;

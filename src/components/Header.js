@@ -15,11 +15,11 @@ import {
   Tabs,
   Tab,
   Divider,
-  SvgIcon,
+  Stack
 } from "@mui/material";
-import { NextLinkComposed } from "../src/Link";
-import useProvider from "../helpers/useProvider";
-import connectMetamask from "../services/blockchain/connectMetamask";
+import { NextLinkComposed } from "../Link";
+import useProvider from "@helpers/useProvider";
+import connectMetamask from "@services/blockchain/connectMetamask";
 import md5 from "crypto-js/md5";
 
 import Logo from "./vercel.svg";
@@ -37,7 +37,8 @@ const Header = () => {
   const handleOpenUserMenu = (e) => {
     setAnchorElUser(e.currentTarget);
   };
-  const handleCloseUserMenu = () => {
+  const handleCloseUserMenu = (i) => () => {
+    if (i !== undefined) setTab(i);
     setAnchorElUser(null);
   };
 
@@ -71,23 +72,19 @@ const Header = () => {
     <AppBar position="static">
       <Container maxWidth="lg">
         <Toolbar disableGutters sx={{ justifyContent: "space-between" }}>
-          <Box>
+          <Stack direction="row" spacing={1}>
             <Logo className={styles.logo} />
             <Typography
               variant="h6"
               noWrap
-              component="a"
-              href="/"
               sx={{
                 color: "inherit",
-                ml: 2,
-                textDecoration: "none",
                 fontWeight: 700,
               }}
             >
               NFT Marketplace
             </Typography>
-          </Box>
+          </Stack>
 
           <Box>
             <Tabs value={tab} onChange={handleTab} textColor="inherit">
@@ -139,28 +136,31 @@ const Header = () => {
                   anchorEl={anchorElUser}
                   keepMounted
                   open={Boolean(anchorElUser)}
-                  onClose={handleCloseUserMenu}
+                  onClose={handleCloseUserMenu()}
                 >
                   <MenuItem
-                    onClick={handleCloseUserMenu}
+                    onClick={handleCloseUserMenu(3)}
                     component={NextLinkComposed}
                     to={{ pathname: "/user/items" }}
+                    disabled={tab === 3}
                   >
                     <Typography textAlign="center">My Nfts</Typography>
                   </MenuItem>
                   <MenuItem
-                    onClick={handleCloseUserMenu}
+                    onClick={handleCloseUserMenu(4)}
                     component={NextLinkComposed}
                     to={{ pathname: "/user/offers" }}
+                    disabled={tab === 4}
                   >
                     <Typography textAlign="center">My Offers</Typography>
                   </MenuItem>
                   <Divider />
 
                   <MenuItem
-                    onClick={handleCloseUserMenu}
+                    onClick={handleCloseUserMenu(5)}
                     component={NextLinkComposed}
                     to={{ pathname: "/user/funds" }}
+                    disabled={tab === 5}
                   >
                     <Typography textAlign="center">Withdraw Funds</Typography>
                   </MenuItem>

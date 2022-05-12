@@ -9,7 +9,7 @@ import {
 } from "@mui/material";
 import { FaEthereum } from "react-icons/fa";
 
-import { NextLinkComposed } from "../src/Link";
+import { NextLinkComposed } from "../Link";
 
 const CollectionCard = ({ collection, ...props }) => {
   return (

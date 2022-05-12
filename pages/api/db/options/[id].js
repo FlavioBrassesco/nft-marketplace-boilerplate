@@ -1,5 +1,5 @@
-import connectDB from "../../../../middleware/connectDB";
-import Option from "../../../../models/Option";
+import connectDB from "@middleware/connectDB";
+import Option from "@services/database/models/Option";
 
 const handler = async function (req, res) {
   const { id } = req.query;

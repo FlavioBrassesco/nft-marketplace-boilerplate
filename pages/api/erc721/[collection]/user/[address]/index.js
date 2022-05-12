@@ -1,5 +1,5 @@
-import connectEthers from "../../../../../middleware/connectEthers";
-const { abi } = require("../../../../../services/blockchain/abi/erc721.json");
+import connectEthers from "@middleware/connectEthers";
+const { abi } = require("@services/blockchain/abi/erc721.json");
 
 export default async function handler(req, res) {
   const { collection, address } = req.query;

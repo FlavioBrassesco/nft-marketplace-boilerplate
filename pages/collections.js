@@ -12,7 +12,7 @@ import {
   ToggleButtonGroup,
   ToggleButton,
 } from "@mui/material";
-import CollectionCard from "../components/CollectionCard";
+import CollectionCard from "@components/CollectionCard";
 import { FiGrid, FiList } from "react-icons/fi";
 
 import { dataC as data } from "./data";

@@ -1,4 +1,9 @@
-POST http://localhost:3000/api/marketplace/admin/corecontract HTTP/1.1
+###
+GET http://localhost:3000/api/db/corecontracts HTTP/1.1
+###
+GET http://localhost:3000/api/db/corecontracts/626c6e1d5f8c31211997ce5c HTTP/1.1
+###
+POST http://localhost:3000/api/db/corecontracts HTTP/1.1
 content-type: application/json
 
 {
@@ -6,11 +11,7 @@ content-type: application/json
     "address": "0xc82157De4B27A8D19243f2e07430e3C0880d63E8"
 }
 ###
-GET http://localhost:3000/api/marketplace/admin/corecontract HTTP/1.1
-###
-GET http://localhost:3000/api/marketplace/admin/corecontract/626c7074c97c1471f96e2e98 HTTP/1.1
-###
-PUT http://localhost:3000/api/marketplace/admin/corecontract/626c7074c97c1471f96e2e98 HTTP/1.1
+PUT http://localhost:3000/api/db/corecontracts/626c6e1d5f8c31211997ce5c HTTP/1.1
 content-type: application/json
 
 {
@@ -18,4 +19,17 @@ content-type: application/json
     "address": "0xc82157De4B27A8D19243f2e07430e3C0880d63E9"
 }
 ###
-DELETE http://localhost:3000/api/marketplace/admin/corecontract/626c7074c97c1471f96e2e98 HTTP/1.1
+DELETE http://localhost:3000/api/db/corecontracts/626c6e1d5f8c31211997ce5c HTTP/1.1
+
+###
+GET http://localhost:3000/api/db/collections HTTP/1.1
+###
+GET http://localhost:3000/api/db/items HTTP/1.1
+###
+GET http://localhost:3000/api/db/options HTTP/1.1
+
+###
+GET http://localhost:3000/api/erc721/items/ HTTP/1.1
+
+###
+GET http://localhost:3000/api/erc721/user HTTP/1.1
