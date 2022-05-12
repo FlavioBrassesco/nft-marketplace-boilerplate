@@ -1,39 +1,21 @@
 import { useState } from "react";
 import CollectionSelect from "../components/CollectionSelect";
-import StatusSelect from "../components/StatusSelect";
+import { StatusSelect } from "../components/StatusSelect";
 import StatusPrice from "../components/StatusPrice";
 import StatusDays from "../components/StatusDays";
 import { ethers } from "ethers";
 import ItemCard from "../components/ItemCard";
 
-import { Grid, Paper, Stack, Container, Divider } from "@mui/material";
+import {
+  Grid,
+  Paper,
+  Stack,
+  Container,
+  Divider,
+  Typography,
+} from "@mui/material";
 
-const data = [
-  {
-    name: "#1109",
-    collection: "Stories from the crypto",
-    price: (Math.random() * 10).toFixed(2),
-    priceUSD: (Math.random() * 50).toFixed(2),
-    image: `https://picsum.photos/seed/cripto/200/200`,
-    status: "Auction"
-  },
-  {
-    name: "#1122",
-    collection: "Trashure",
-    price: (Math.random() * 10).toFixed(2),
-    priceUSD: (Math.random() * 50).toFixed(2),
-    image: `https://picsum.photos/seed/stories/200/200`,
-    status: "For Sale"
-  },
-  {
-    name: "#1144",
-    collection: "CoffeeDogs",
-    price: (Math.random() * 10).toFixed(2),
-    priceUSD: (Math.random() * 50).toFixed(2),
-    image: `https://picsum.photos/seed/dog/200/200`,
-    status: "For Sale"
-  },
-]
+import { data } from "./data";
 
 const Home = () => {
   const [collection, setCollection] = useState([]);
@@ -59,6 +41,15 @@ const Home = () => {
   return (
     <Container maxWidth="lg">
       <Grid container spacing={2} component="main" sx={{ py: 4 }}>
+        <Grid item xs={12}>
+          <Typography
+            variant="h6"
+            component="h2"
+            sx={{ textTransform: "uppercase" }}
+          >
+            Overview
+          </Typography>
+        </Grid>
         <Grid item md={4}>
           <Paper sx={{ p: 2 }} elevation={6}>
             <Stack spacing={2}>
@@ -91,7 +82,7 @@ const Home = () => {
         <Grid container item md={8} spacing={2}>
           {data.map((nft) => (
             <Grid md={4} key={nft.name} item>
-              <ItemCard nft={nft}/>
+              <ItemCard nft={nft} />
             </Grid>
           ))}
         </Grid>

@@ -10,10 +10,12 @@ import {
 } from "@mui/material";
 import { FaEthereum } from "react-icons/fa";
 
+import { NextLinkComposed } from "../src/Link";
+
 const ItemCard = ({ nft, ...props }) => {
   return (
     <Card>
-      <CardActionArea>
+      <CardActionArea component={NextLinkComposed} to={{ pathname: "/item" }}>
         <CardMedia
           component="img"
           height="194"
@@ -49,9 +51,7 @@ const ItemCard = ({ nft, ...props }) => {
                   <FaEthereum />
                 </Typography>
 
-                <Typography variant="h6">
-                  {nft.price}
-                </Typography>
+                <Typography variant="h6">{nft.price}</Typography>
               </Stack>
             </Stack>
           )}

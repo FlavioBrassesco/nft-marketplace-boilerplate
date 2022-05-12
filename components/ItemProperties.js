@@ -20,8 +20,9 @@ const ItemProperties = ({ properties = [] }) => {
   };
 
   return (
-    <Accordion expanded={expanded} onClick={handleClick}>
+    <Accordion expanded={expanded}>
       <AccordionSummary
+        onClick={handleClick}
         expandIcon={
           <SvgIcon>
             <FiChevronDown />

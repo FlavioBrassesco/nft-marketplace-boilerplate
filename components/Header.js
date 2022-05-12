@@ -1,3 +1,4 @@
+import { useEffect, useState } from "react";
 import {
   AppBar,
   Avatar,
@@ -5,6 +6,7 @@ import {
   Tooltip,
   IconButton,
   Box,
+  Badge,
   Container,
   Menu,
   MenuItem,
@@ -12,17 +14,19 @@ import {
   Typography,
   Tabs,
   Tab,
+  Divider,
+  SvgIcon,
 } from "@mui/material";
-import Logo from "./vercel.svg";
-import styles from "./Header.module.css";
+import { NextLinkComposed } from "../src/Link";
 import useProvider from "../helpers/useProvider";
 import connectMetamask from "../services/blockchain/connectMetamask";
-import MetamaskLogo from "./metamask.svg";
-import { useEffect, useState } from "react";
 import md5 from "crypto-js/md5";
-import Link from "next/link";
 
-import { NextLinkComposed } from "../src/Link";
+import Logo from "./vercel.svg";
+import MetamaskLogo from "./metamask.svg";
+import styles from "./Header.module.css";
+
+import { FiDollarSign } from "react-icons/fi";
 
 const Header = () => {
   const { provider, setProvider, signer } = useProvider();
@@ -93,7 +97,6 @@ const Header = () => {
                 to={{ pathname: "/" }}
                 id="view-tab-0"
               />
-
               <Tab
                 label="Collections"
                 component={NextLinkComposed}
@@ -103,7 +106,7 @@ const Header = () => {
               <Tab
                 label="Activity"
                 component={NextLinkComposed}
-                to={{ pathname: "/collections" }}
+                to={{ pathname: "/activity" }}
                 id="view-tab-2"
               />
             </Tabs>
@@ -121,12 +124,14 @@ const Header = () => {
               <>
                 <Tooltip title="User account">
                   <IconButton onClick={handleOpenUserMenu}>
-                    <Avatar
-                      alt={signerAddress}
-                      src={`https://www.gravatar.com/avatar/${md5(
-                        signerAddress
-                      )}?d=retro&f=y&s=128`}
-                    />
+                    <Badge color="secondary" badgeContent={<FiDollarSign />}>
+                      <Avatar
+                        alt={signerAddress}
+                        src={`https://www.gravatar.com/avatar/${md5(
+                          signerAddress
+                        )}?d=retro&f=y&s=128`}
+                      />
+                    </Badge>
                   </IconButton>
                 </Tooltip>
                 <Menu
@@ -136,14 +141,28 @@ const Header = () => {
                   open={Boolean(anchorElUser)}
                   onClose={handleCloseUserMenu}
                 >
-                  <MenuItem onClick={handleCloseUserMenu}>
-                    <Typography textAlign="center">My NFTs</Typography>
+                  <MenuItem
+                    onClick={handleCloseUserMenu}
+                    component={NextLinkComposed}
+                    to={{ pathname: "/user/items" }}
+                  >
+                    <Typography textAlign="center">My Nfts</Typography>
                   </MenuItem>
-                  <MenuItem onClick={handleCloseUserMenu}>
-                    <Typography textAlign="center">My Items</Typography>
-                  </MenuItem>
-                  <MenuItem onClick={handleCloseUserMenu}>
+                  <MenuItem
+                    onClick={handleCloseUserMenu}
+                    component={NextLinkComposed}
+                    to={{ pathname: "/user/offers" }}
+                  >
                     <Typography textAlign="center">My Offers</Typography>
+                  </MenuItem>
+                  <Divider />
+
+                  <MenuItem
+                    onClick={handleCloseUserMenu}
+                    component={NextLinkComposed}
+                    to={{ pathname: "/user/funds" }}
+                  >
+                    <Typography textAlign="center">Withdraw Funds</Typography>
                   </MenuItem>
                 </Menu>
               </>

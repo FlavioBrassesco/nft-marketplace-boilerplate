@@ -2,9 +2,7 @@ import {
   Grid,
   Container,
   Typography,
-  IconButton,
   SvgIcon,
-  Stack,
   FormControl,
   InputLabel,
   Select,
@@ -17,34 +15,22 @@ import {
 import CollectionCard from "../components/CollectionCard";
 import { FiGrid, FiList } from "react-icons/fi";
 
-const data = [
-  {
-    name: "Stories from the crypto",
-    banner: "https://picsum.photos/seed/stories/200/200",
-    avatar: "https://picsum.photos/seed/storiesa/200/200",
-    volume: "100,000",
-  },
-  {
-    name: "CoffeeDogs",
-    banner: "https://picsum.photos/seed/storiesss/200/200",
-    avatar: "https://picsum.photos/seed/storiessa/200/200",
-    volume: "120,000",
-  },
-  {
-    name: "Trashure",
-    banner: "https://picsum.photos/seed/storiesssss/200/200",
-    avatar: "https://picsum.photos/seed/storiesssa/200/200",
-    volume: "140,000",
-  },
-];
+import { dataC as data } from "./data";
 
 const Collections = () => {
   return (
     <Container maxWidth="lg">
       <Grid container spacing={2} sx={{ py: 4 }}>
         <Grid item xs={12}>
-          <Typography variant="h2">Collections</Typography>
+          <Typography
+            variant="h6"
+            component="h2"
+            sx={{ textTransform: "uppercase" }}
+          >
+            Collections
+          </Typography>
         </Grid>
+
         <Grid item xs={12}>
           <Box
             sx={{
@@ -92,11 +78,13 @@ const Collections = () => {
             </FormControl>
           </Box>
         </Grid>
+
         {data.map((d) => (
           <Grid item md={4} key={d.name}>
             <CollectionCard collection={d} />
           </Grid>
         ))}
+
         <Grid item xs={12} mt={4}>
           <Box
             sx={{

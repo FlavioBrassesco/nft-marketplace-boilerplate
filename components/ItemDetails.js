@@ -13,16 +13,16 @@ import { FiChevronDown, FiSearch } from "react-icons/fi";
 import { useState } from "react";
 
 const ItemDetails = ({ details }) => {
-
-  const [ expanded, setExpanded ] = useState(true);
+  const [expanded, setExpanded] = useState(true);
 
   const handleClick = () => {
     setExpanded(!expanded);
-  }
+  };
 
   return (
-    <Accordion expanded={expanded} onClick={handleClick}>
+    <Accordion expanded={expanded}>
       <AccordionSummary
+        onClick={handleClick}
         expandIcon={
           <SvgIcon>
             <FiChevronDown />
@@ -40,7 +40,11 @@ const ItemDetails = ({ details }) => {
           <ListItem>
             <ListItemText>
               <Stack direction="row" justifyContent="space-between">
-                <Typography variant="body2" color="text.secondary" sx={{ textTransform: "uppercase" }}>
+                <Typography
+                  variant="body2"
+                  color="text.secondary"
+                  sx={{ textTransform: "uppercase" }}
+                >
                   Contract Address
                 </Typography>
 
@@ -59,7 +63,11 @@ const ItemDetails = ({ details }) => {
           <ListItem>
             <ListItemText>
               <Stack direction="row" justifyContent="space-between">
-                <Typography variant="body2" color="text.secondary" sx={{ textTransform: "uppercase" }}>
+                <Typography
+                  variant="body2"
+                  color="text.secondary"
+                  sx={{ textTransform: "uppercase" }}
+                >
                   IPFS JSON
                 </Typography>
 

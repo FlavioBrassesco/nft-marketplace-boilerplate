@@ -10,7 +10,7 @@ import {
   ListItemButton,
   ListItemIcon,
   ListItemText,
-  ListSubheader
+  ListSubheader,
 } from "@mui/material";
 import {
   FiChevronDown,
@@ -19,22 +19,21 @@ import {
   FiBarChart,
   FiEdit3,
   FiSend,
-  FiX
+  FiX,
 } from "react-icons/fi";
 import { useState } from "react";
 
 const ItemManage = () => {
-
-  const [ expanded, setExpanded ] = useState(true);
+  const [expanded, setExpanded] = useState(true);
 
   const handleClick = () => {
     setExpanded(!expanded);
-  }
-
+  };
 
   return (
-    <Accordion expanded={expanded} onClick={handleClick}>
+    <Accordion expanded={expanded}>
       <AccordionSummary
+        onClick={handleClick}
         expandIcon={
           <SvgIcon>
             <FiChevronDown />
@@ -49,7 +48,7 @@ const ItemManage = () => {
       </AccordionSummary>
       <AccordionDetails>
         <List>
-        <ListSubheader>Marketplace</ListSubheader>
+          <ListSubheader>Marketplace</ListSubheader>
           <ListItem disablePadding>
             <ListItemButton>
               <ListItemIcon>
@@ -73,7 +72,7 @@ const ItemManage = () => {
               <ListItemText>Auction</ListItemText>
             </ListItemButton>
           </ListItem>
-          
+
           <ListItem disablePadding>
             <ListItemButton disabled>
               <ListItemIcon>

@@ -9,10 +9,12 @@ import {
 } from "@mui/material";
 import { FaEthereum } from "react-icons/fa";
 
+import { NextLinkComposed } from "../src/Link";
+
 const CollectionCard = ({ collection, ...props }) => {
   return (
     <Card>
-      <CardActionArea>
+      <CardActionArea component={NextLinkComposed} to={{ pathname: "/collection"}}>
         <CardMedia
           component="img"
           height="150"
