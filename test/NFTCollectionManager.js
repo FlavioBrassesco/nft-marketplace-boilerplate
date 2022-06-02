@@ -59,13 +59,34 @@ describe("NFTCollectionManager", () => {
     });
   });
 
+  describe("getCollectionsCount & collectionByIndex", () => {
+    it("Should return proper number of collections", async () => {
+      const tx = await nftcollectionmanager.addWhitelistedCollection(
+        nftminter.address,
+        true
+      );
+      await tx.wait();
+
+      expect(await nftcollectionmanager.getCollectionsCount()).to.equal(1);
+    });
+    it("Should return correct contract at index 0", async () => {
+      const tx = await nftcollectionmanager.addWhitelistedCollection(
+        nftminter.address,
+        true
+      );
+      await tx.wait();
+
+      expect(await nftcollectionmanager.collectionByIndex(0)).to.equal(
+        nftminter.address
+      );
+    });
+  });
+
   describe("setFee & getFee", function () {
     it("Should revert if trying to set fee for a collection not added to the marketplace", async () => {
       await expect(
         nftcollectionmanager.setFee(nftminter.address, 30)
-      ).to.be.revertedWith(
-        "Collection does not exists in marketplace"
-      );
+      ).to.be.revertedWith("Collection does not exists in marketplace");
     });
 
     it("Should revert if trying to set fee higher than 5000", async () => {
@@ -98,9 +119,7 @@ describe("NFTCollectionManager", () => {
     it("Should revert if trying to set floor price for a collection not added to the marketplace", async () => {
       await expect(
         nftcollectionmanager.setFloorPrice(nftminter.address, 30)
-      ).to.be.revertedWith(
-        "Collection does not exists in marketplace"
-      );
+      ).to.be.revertedWith("Collection does not exists in marketplace");
     });
     it("Should revert if trying to set floor price to 0", async () => {
       const txWhitelist = await nftcollectionmanager.addWhitelistedCollection(

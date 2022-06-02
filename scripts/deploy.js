@@ -21,18 +21,40 @@ async function main() {
     salesService.address,
     forwarder.address
   );
-  const nftauctions = await helpers.deployAuctions(7, nftmanager.address, salesService.address, forwarder.address)
-  const nftbuyoffers = await helpers.deployBuyOffers(7, nftmanager.address, salesService.address, forwarder.address);
-  
+  const nftauctions = await helpers.deployAuctions(
+    7,
+    nftmanager.address,
+    salesService.address,
+    forwarder.address
+  );
+  const nftbuyoffers = await helpers.deployBuyOffers(
+    7,
+    nftmanager.address,
+    salesService.address,
+    forwarder.address
+  );
+
   console.log("Manager", nftmanager.address);
   console.log("Weth", weth.address);
   console.log("UniFactory", unifactory.address);
   console.log("UniRouter", unirouter.address);
   console.log("SalesService", salesService.address);
-  console.log("Forwarder", forwarder.address );
+  console.log("Forwarder", forwarder.address);
   console.log("Marketplace", nftmarketplace.address);
   console.log("Auctions", nftauctions.address);
   console.log("BuyOffers", nftbuyoffers.address);
+
+  for (let i = 0; i < 3; i++) {
+    const nftminter = await helpers.deployMinter(
+      `ERC721-${i}`,
+      `ERC-${i}`,
+      `https://localhost:3000/erc721-${i}.json`,
+      `https://localhost:3000/img-${i}/`,
+      5000,
+      100000
+    );
+    console.log(`Collection${i}`, nftminter.address);
+  }
 }
 
 main()

@@ -1,22 +1,40 @@
 ###
+GET http://localhost:3000/api/db/options HTTP/1.1
+###
 GET http://localhost:3000/api/db/corecontracts HTTP/1.1
 ###
-GET http://localhost:3000/api/db/corecontracts/626c6e1d5f8c31211997ce5c HTTP/1.1
+POST http://localhost:3000/api/db/options HTTP/1.1
+content-type: application/json
+
+{
+    "updated": "datetime",
+    "options": {
+        "title": "NFT Marketplace",
+        "description": "A Multi-Collection NFT Marketplace for artists",
+        "logoURL": "https://picsum.photos/400/400"
+    },
+    "terms": "These are the marketplace terms & conditions....",
+    "socialLinks": [
+        { "name": "instagram", "url": "https://www.instagram.com/" },
+        { "name": "discord", "url": "https://discord.gg/" }
+    ]
+}
+### Manager 0x343098c42f34b23eFcaE3EcBCfA056995Df39499
+# Weth 0x67175957C9CCEBAA536b63A8FFEcaaC59a8E216a        
+# UniFactory 0x7432eccdBaDA161a8E9f960993D2724A898f6519  
+# UniRouter 0xAf6d28520819C16bDe19fF2d8b629b2ad2fe7469   
+# SalesService 0xAdc1EBE8d3B425aECc654F943F2cE4C0C63E5bd7
+# Forwarder 0x65Ad7394BdaF7a71D34f95d56E0b6dB538FEDE69   
+# Marketplace 0x99C113555137Db2e3d844F7E46cDcBA914234AA6 
+# Auctions 0x7d2C577218a54107eeaa0C20a01b6FB15897E1DA    
+# BuyOffers 0xFccA268369D72831B01Bb44a14cD4d98cE1D17bF 
 ###
 POST http://localhost:3000/api/db/corecontracts HTTP/1.1
 content-type: application/json
 
 {
-    "key": "auctions",
-    "address": "0xc82157De4B27A8D19243f2e07430e3C0880d63E8"
-}
-###
-PUT http://localhost:3000/api/db/corecontracts/626c6e1d5f8c31211997ce5c HTTP/1.1
-content-type: application/json
-
-{
-    "key": "auctions",
-    "address": "0xc82157De4B27A8D19243f2e07430e3C0880d63E9"
+    "key": "manager",
+    "address": "0x343098c42f34b23eFcaE3EcBCfA056995Df39499"
 }
 ###
 DELETE http://localhost:3000/api/db/corecontracts/626c6e1d5f8c31211997ce5c HTTP/1.1

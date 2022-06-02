@@ -1,23 +1,22 @@
 import connectDB from "@middleware/connectDB";
-import CoreContract from "@services/database/models/CoreContract";
+import AuthorizedMarketplace from "@services/database/models/AuthorizedMarketplace";
 
 const handler = async function (req, res) {
   const { id } = req.query;
 
   if (req.method === "GET") {
-    const contract = await CoreContract.findById(id);
+    const contract = await AuthorizedMarketplace.findById(id);
     return res.status(200).json(contract);
   } else if (req.method === "PUT") {
     const contract = {
-      key: req.body.key,
-      address: req.body.address,
+      name: req.body.name
     };
-    const updated = await CoreContract.findByIdAndUpdate(id, contract, {
+    const updated = await AuthorizedMarketplace.findByIdAndUpdate(id, contract, {
       new: true,
     });
     res.status(201).json(updated);
   } else if (req.method === "DELETE") {
-    await CoreContract.findByIdAndRemove(id);
+    await AuthorizedMarketplace.findByIdAndRemove(id);
     res.status(204).end();
   }
 };

@@ -27,7 +27,6 @@ const StatusPrice = ({
         valueLabelDisplay="auto"
         min={0}
         max={max}
-        step={1}
         defaultValue={[0,max]}
         getAriaValueText={valuetext} />
       </FormControl>

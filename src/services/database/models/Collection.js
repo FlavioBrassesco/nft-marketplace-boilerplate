@@ -1,28 +1,34 @@
 const mongoose = require("mongoose");
 
 const collectionSchema = new mongoose.Schema({
+  name: { type: String },
+  symbol: { type: String },
   address: {
     type: String,
     required: true,
     minlength: 42,
     maxlength: 42,
   },
-  uri: {
+  fee: { type: String },
+  floorPrice: { type: String },
+  isWhitelisted: { type: Boolean },
+  metadataURL: {
     type: String,
-    required: true
+    required: true,
   },
+  metadataId: { type: String },
   sales: {
-    type: Number
+    type: Number,
   },
   volume: {
-    type: String
+    type: String,
   },
   supply: {
-    type: String
+    type: String,
   },
   items: {
-    type: Number
-  }
+    type: Number,
+  },
 });
 
 collectionSchema.set("toJSON", {
@@ -33,5 +39,6 @@ collectionSchema.set("toJSON", {
   },
 });
 
-global.Collection = global.Collection || mongoose.model("Collection", collectionSchema);
+global.Collection =
+  global.Collection || mongoose.model("Collection", collectionSchema);
 module.exports = global.Collection;

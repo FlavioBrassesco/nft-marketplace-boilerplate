@@ -1,4 +1,4 @@
-import { useEffect, useState } from "react";
+import { useState, useContext } from "react";
 import {
   AppBar,
   Avatar,
@@ -15,22 +15,22 @@ import {
   Tabs,
   Tab,
   Divider,
-  Stack
+  Stack,
+  SvgIcon,
 } from "@mui/material";
+import Web3Context from "@contexts/Web3Provider";
 import { NextLinkComposed } from "../Link";
-import useProvider from "@helpers/useProvider";
-import connectMetamask from "@services/blockchain/connectMetamask";
 import md5 from "crypto-js/md5";
 
 import Logo from "./vercel.svg";
 import MetamaskLogo from "./metamask.svg";
-import styles from "./Header.module.css";
+import styles from "@styles/Header.module.css";
 
-import { FiDollarSign } from "react-icons/fi";
+import { FiDollarSign, FiKey } from "react-icons/fi";
 
 const Header = () => {
-  const { provider, setProvider, signer } = useProvider();
-  const [signerAddress, setSignerAddress] = useState("");
+  const { address, connect, disconnect } = useContext(Web3Context);
+
   const [anchorElUser, setAnchorElUser] = useState(null);
   const [tab, setTab] = useState(0);
 
@@ -42,31 +42,15 @@ const Header = () => {
     setAnchorElUser(null);
   };
 
-  const handleConnectMetamask = (e) => {
-    if (!window.ethereum) {
-      window.open("https://metamask.io/", "_blank").focus();
-      return;
-    }
-    connectMetamask()
-      .then((provider) => {
-        setProvider(provider);
-      })
-      .catch((error) => error);
+  const handleDisconnect = () => {
+    setAnchorElUser(null);
+    disconnect();
   };
 
-  const handleTab = (e, v) => {
-    setTab(v);
+  const handleConnect = (e) => {
+    setAnchorElUser(null);
+    connect();
   };
-
-  useEffect(() => {
-    if (signer)
-      signer
-        .getAddress()
-        .then((address) => {
-          setSignerAddress(address);
-        })
-        .catch((error) => error);
-  }, [signer]);
 
   return (
     <AppBar position="static">
@@ -87,7 +71,11 @@ const Header = () => {
           </Stack>
 
           <Box>
-            <Tabs value={tab} onChange={handleTab} textColor="inherit">
+            <Tabs
+              value={tab}
+              onChange={(e, v) => setTab(v)}
+              textColor="inherit"
+            >
               <Tab
                 label="Overview"
                 component={NextLinkComposed}
@@ -110,8 +98,8 @@ const Header = () => {
           </Box>
 
           <Box>
-            {provider === null ? (
-              <Button onClick={handleConnectMetamask} sx={{ color: "inherit" }}>
+            {!address ? (
+              <Button onClick={handleConnect} sx={{ color: "inherit" }}>
                 <MetamaskLogo className={styles["metamask-logo"]} />
                 <Typography noWrap sx={{ ml: 1 }}>
                   Connect Metamask
@@ -123,9 +111,9 @@ const Header = () => {
                   <IconButton onClick={handleOpenUserMenu}>
                     <Badge color="secondary" badgeContent={<FiDollarSign />}>
                       <Avatar
-                        alt={signerAddress}
+                        alt={address}
                         src={`https://www.gravatar.com/avatar/${md5(
-                          signerAddress
+                          address
                         )}?d=retro&f=y&s=128`}
                       />
                     </Badge>
@@ -139,12 +127,24 @@ const Header = () => {
                   onClose={handleCloseUserMenu()}
                 >
                   <MenuItem
+                    onClick={handleCloseUserMenu(6)}
+                    component={NextLinkComposed}
+                    to={{ pathname: "/user/admin" }}
+                    disabled={tab === 6}
+                  >
+                    <SvgIcon sx={{ mr: 1, color: "text.secondary" }}>
+                      <FiKey />
+                    </SvgIcon>
+                    Admin
+                  </MenuItem>
+
+                  <MenuItem
                     onClick={handleCloseUserMenu(3)}
                     component={NextLinkComposed}
                     to={{ pathname: "/user/items" }}
                     disabled={tab === 3}
                   >
-                    <Typography textAlign="center">My Nfts</Typography>
+                    My Nfts
                   </MenuItem>
                   <MenuItem
                     onClick={handleCloseUserMenu(4)}
@@ -152,7 +152,7 @@ const Header = () => {
                     to={{ pathname: "/user/offers" }}
                     disabled={tab === 4}
                   >
-                    <Typography textAlign="center">My Offers</Typography>
+                    My Offers
                   </MenuItem>
                   <Divider />
 
@@ -162,8 +162,11 @@ const Header = () => {
                     to={{ pathname: "/user/funds" }}
                     disabled={tab === 5}
                   >
-                    <Typography textAlign="center">Withdraw Funds</Typography>
+                    Withdraw Funds
                   </MenuItem>
+                  <Divider />
+
+                  <MenuItem onClick={handleDisconnect}>Disconnect</MenuItem>
                 </Menu>
               </>
             )}

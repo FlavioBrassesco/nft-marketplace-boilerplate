@@ -110,4 +110,12 @@ contract NFTCollectionManager is INFTCollectionManager, Ownable {
     {
         return _collectionData[contractAddress_].floorPrice;
     }
+
+    function getCollectionsCount() public view returns (uint256) {
+        return _collections.length();
+    }
+
+    function collectionByIndex(uint256 index_) public view returns(address) {
+        return _collections.at(index_);
+    }
 }

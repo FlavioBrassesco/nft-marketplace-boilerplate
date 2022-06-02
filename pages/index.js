@@ -21,7 +21,7 @@ const Home = () => {
   const [collection, setCollection] = useState([]);
   const [status, setStatus] = useState("All");
   const [days, setDays] = useState(7);
-  const [values, setValues] = useState([0, 1000]);
+  const [values, setValues] = useState([0, 100]);
 
   const range = [
     ethers.utils.parseEther("0.000001"),
