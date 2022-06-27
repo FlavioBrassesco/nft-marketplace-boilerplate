@@ -1,4 +1,7 @@
 import { useState, useContext } from "react";
+import Web3Context from "contexts/Web3Provider";
+import md5 from "crypto-js/md5";
+
 import {
   AppBar,
   Avatar,
@@ -18,15 +21,13 @@ import {
   Stack,
   SvgIcon,
 } from "@mui/material";
-import Web3Context from "@contexts/Web3Provider";
 import { NextLinkComposed } from "../Link";
-import md5 from "crypto-js/md5";
 
 import Logo from "./vercel.svg";
 import MetamaskLogo from "./metamask.svg";
-import styles from "@styles/Header.module.css";
-
 import { FiDollarSign, FiKey } from "react-icons/fi";
+
+import styles from "styles/Header.module.css";
 
 const Header = () => {
   const { address, connect, disconnect } = useContext(Web3Context);

@@ -41,16 +41,16 @@ contract NFTBuyOffers is
     INFTCollectionManager internal CollectionManager;
     ISalesService internal SalesService;
 
-    event BuyOfferCreated(
+    event OfferCreated(
         address indexed bidder,
-        address indexed contractAddress,
+        address indexed collectionAddress,
         uint256 indexed tokenId,
         uint256 bid
     );
 
-    event BuyOfferStatusChanged(
+    event OfferStatusChanged(
         address indexed bidder,
-        address indexed contractAddress,
+        address indexed collectionAddress,
         uint256 indexed tokenId,
         uint256 bid,
         bool accepted
@@ -67,15 +67,15 @@ contract NFTBuyOffers is
         SalesService = ISalesService(salesService_);
     }
 
-    function createBuyOffer(
-        address contractAddress_,
+    function createOffer(
+        address collectionAddress_,
         uint256 tokenId_,
-        address tokenAddress_,
+        address erc20Address_,
         uint256 amountIn_
     ) public payable whenNotPaused {
-        onlyWhitelisted(contractAddress_);
+        onlyWhitelisted(collectionAddress_);
         require(
-            !_userBiddedTokens[_msgSender()][contractAddress_].contains(
+            !_userBiddedTokens[_msgSender()][collectionAddress_].contains(
                 tokenId_
             ),
             "You already have an offer for this item"
@@ -90,34 +90,34 @@ contract NFTBuyOffers is
             value = SalesService.approvePaymentERC20(
                 _msgSender(),
                 address(this),
-                tokenAddress_,
+                erc20Address_,
                 amountIn_,
                 amountIn_,
                 0
             );
         }
 
-        _addBuyOffer(_msgSender(), contractAddress_, tokenId_, value);
+        _addOffer(_msgSender(), collectionAddress_, tokenId_, value);
 
-        emit BuyOfferCreated(_msgSender(), contractAddress_, tokenId_, value);
+        emit OfferCreated(_msgSender(), collectionAddress_, tokenId_, value);
     }
 
-    function cancelBuyOffer(address contractAddress_, uint256 tokenId_)
+    function cancelOffer(address collectionAddress_, uint256 tokenId_)
         public
         nonReentrant
     {
         require(
-            _userBiddedTokens[_msgSender()][contractAddress_].contains(
+            _userBiddedTokens[_msgSender()][collectionAddress_].contains(
                 tokenId_
             ),
             "No active offer found"
         );
-        uint256 bid = _userBids[_msgSender()][contractAddress_][tokenId_];
-        _destroyBuyOffer(_msgSender(), contractAddress_, tokenId_);
+        uint256 bid = _userBids[_msgSender()][collectionAddress_][tokenId_];
+        _destroyOffer(_msgSender(), collectionAddress_, tokenId_);
 
-        emit BuyOfferStatusChanged(
+        emit OfferStatusChanged(
             _msgSender(),
-            contractAddress_,
+            collectionAddress_,
             tokenId_,
             bid,
             false
@@ -126,79 +126,79 @@ contract NFTBuyOffers is
         SalesService.unlockPendingRevenue(_msgSender(), bid, 0);
     }
 
-    function acceptBuyOffer(
-        address contractAddress_,
+    function acceptOffer(
+        address collectionAddress_,
         uint256 tokenId_,
         address bidder_
     ) public nonReentrant {
         require(
-            _userBiddedTokens[bidder_][contractAddress_].contains(tokenId_),
+            _userBiddedTokens[bidder_][collectionAddress_].contains(tokenId_),
             "No active offer found"
         );
-        uint256 bid = _userBids[bidder_][contractAddress_][tokenId_];
-        emit BuyOfferStatusChanged(
+        uint256 bid = _userBids[bidder_][collectionAddress_][tokenId_];
+        emit OfferStatusChanged(
             bidder_,
-            contractAddress_,
+            collectionAddress_,
             tokenId_,
             bid,
             true
         );
 
-        _destroyBuyOffer(bidder_, contractAddress_, tokenId_);
+        _destroyOffer(bidder_, collectionAddress_, tokenId_);
 
         SalesService.unlockPendingRevenue(
             _msgSender(),
             bid,
-            CollectionManager.getFee(contractAddress_)
+            CollectionManager.getFee(collectionAddress_)
         );
         //NFT transfer. Fails if msg sender is not the owner of NFT.
-        IERC721(contractAddress_).safeTransferFrom(
+        IERC721(collectionAddress_).safeTransferFrom(
             _msgSender(),
             bidder_,
             tokenId_
         );
     }
 
-    function bidOfUserByIndex(
+    function offerOfUserByIndex(
         address user_,
-        address contractAddress_,
+        address collectionAddress_,
         uint256 index_
     ) public view returns (uint256 bid) {
         require(
-            index_ < _userBiddedTokens[user_][contractAddress_].length(),
+            index_ < _userBiddedTokens[user_][collectionAddress_].length(),
             "User Bid index out of bounds"
         );
-        uint256 tokenId = _userBiddedTokens[user_][contractAddress_].at(index_);
-        return _userBids[user_][contractAddress_][tokenId];
+        uint256 tokenId = _userBiddedTokens[user_][collectionAddress_].at(index_);
+        return _userBids[user_][collectionAddress_][tokenId];
     }
 
-    function getUserBidsCount(address user_, address contractAddress_)
+    function getUserOffersCount(address user_, address collectionAddress_)
         public
         view
         returns (uint256)
     {
-        return _userBiddedTokens[user_][contractAddress_].length();
+        return _userBiddedTokens[user_][collectionAddress_].length();
     }
 
-    function bidByIndex(
-        address contractAddress_,
+    function offerByIndex(
+        address collectionAddress_,
         uint256 tokenId_,
         uint256 index_
     ) public view returns (address user, uint256 bid) {
         require(
-            index_ < _tokenBidders[contractAddress_][tokenId_].length(),
+            index_ < _tokenBidders[collectionAddress_][tokenId_].length(),
             "Bid index out of bounds"
         );
-        user = _tokenBidders[contractAddress_][tokenId_].at(index_);
-        return (user, _userBids[user][contractAddress_][tokenId_]);
+        user = _tokenBidders[collectionAddress_][tokenId_].at(index_);
+        return (user, _userBids[user][collectionAddress_][tokenId_]);
     }
 
-    function getAllBidsCount(address contractAddress_, uint256 tokenId_)
+    function getAllOffersCount(address collectionAddress_, uint256 tokenId_)
         public
         view
         returns (uint256)
     {
-        return _tokenBidders[contractAddress_][tokenId_].length();
+        return _tokenBidders[collectionAddress_][tokenId_].length();
     }
 
     function setPanicSwitch(bool status_) public onlyOwner {
@@ -229,30 +229,30 @@ contract NFTBuyOffers is
         return ERC2771Context._msgData();
     }
 
-    function _addBuyOffer(
+    function _addOffer(
         address user_,
-        address contractAddress_,
+        address collectionAddress_,
         uint256 tokenId_,
         uint256 bid_
     ) internal {
-        _userBids[user_][contractAddress_][tokenId_] = bid_;
-        _userBiddedTokens[user_][contractAddress_].add(tokenId_);
-        _tokenBidders[contractAddress_][tokenId_].add(user_);
+        _userBids[user_][collectionAddress_][tokenId_] = bid_;
+        _userBiddedTokens[user_][collectionAddress_].add(tokenId_);
+        _tokenBidders[collectionAddress_][tokenId_].add(user_);
     }
 
-    function _destroyBuyOffer(
+    function _destroyOffer(
         address user_,
-        address contractAddress_,
+        address collectionAddress_,
         uint256 tokenId_
     ) internal {
-        delete _userBids[user_][contractAddress_][tokenId_];
-        _userBiddedTokens[user_][contractAddress_].remove(tokenId_);
-        _tokenBidders[contractAddress_][tokenId_].remove(user_);
+        delete _userBids[user_][collectionAddress_][tokenId_];
+        _userBiddedTokens[user_][collectionAddress_].remove(tokenId_);
+        _tokenBidders[collectionAddress_][tokenId_].remove(user_);
     }
 
-    function onlyWhitelisted(address contractAddress_) internal view {
+    function onlyWhitelisted(address collectionAddress_) internal view {
         require(
-            CollectionManager.isWhitelistedCollection(contractAddress_),
+            CollectionManager.isWhitelistedCollection(collectionAddress_),
             "Contract is not whitelisted"
         );
     }

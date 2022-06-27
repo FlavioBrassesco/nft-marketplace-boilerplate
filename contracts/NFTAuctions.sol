@@ -26,14 +26,14 @@ contract NFTAuctions is
 {
     using EnumerableSet for EnumerableSet.UintSet;
 
-    struct AuctionItem {
+    struct Item {
         address seller;
         address currentBidder;
         uint256 currentBid;
         uint256 endsAt;
     }
 
-    mapping(address => mapping(uint256 => AuctionItem)) internal _auctionItems;
+    mapping(address => mapping(uint256 => Item)) public items;
     mapping(address => mapping(address => EnumerableSet.UintSet))
         internal _userTokenIds;
     mapping(address => EnumerableSet.UintSet) internal _collectionTokenIds;
@@ -42,26 +42,26 @@ contract NFTAuctions is
     INFTCollectionManager internal CollectionManager;
     ISalesService internal SalesService;
 
-    event AuctionItemCreated(
+    event ItemCreated(
         address indexed seller,
-        address indexed nftContract,
+        address indexed collectionAddress,
         uint256 indexed tokenId,
         uint256 price,
         uint256 endsAt
     );
 
-    event AuctionItemTransfer(
+    event ItemTransferred(
         address from,
         address indexed to,
-        address indexed nftContract,
+        address indexed collectionAddress,
         uint256 indexed tokenId,
         uint256 price,
         bool sold
     );
 
-    event AuctionBidCreated(
+    event BidCreated(
         address indexed currentBidder,
-        address indexed nftContract,
+        address indexed collectionAddress,
         uint256 indexed tokenId,
         uint256 currentBid,
         uint256 endsAt
@@ -78,33 +78,33 @@ contract NFTAuctions is
         SalesService = ISalesService(salesService_);
     }
 
-    function createAuctionItem(
-        address contractAddress_,
+    function createItem(
+        address collectionAddress_,
         uint256 tokenId_,
         uint256 floorPrice_,
         uint256 days_
     ) public nonReentrant whenNotPaused {
-        onlyWhitelisted(contractAddress_);
+        onlyWhitelisted(collectionAddress_);
         require(floorPrice_ > 0, "Floor price must be > 0");
         require(days_ >= 1 && days_ <= MAX_DAYS, "Duration out of bounds");
 
-        _addAuctionItem(
+        _addItem(
             _msgSender(),
-            contractAddress_,
+            collectionAddress_,
             tokenId_,
             floorPrice_,
             days_
         );
 
-        emit AuctionItemCreated(
+        emit ItemCreated(
             _msgSender(),
-            contractAddress_,
+            collectionAddress_,
             tokenId_,
             floorPrice_,
             block.timestamp + (days_ * 24 * 60 * 60)
         );
         //NFT transfer from msg sender to this contract
-        IERC721(contractAddress_).safeTransferFrom(
+        IERC721(collectionAddress_).safeTransferFrom(
             _msgSender(),
             address(this),
             tokenId_
@@ -112,30 +112,26 @@ contract NFTAuctions is
     }
 
     function bid(
-        address contractAddress_,
+        address collectionAddress_,
         uint256 tokenId_,
-        address tokenAddress_,
+        address erc20Address_,
         uint256 amountIn_
     ) public payable nonReentrant whenNotPaused {
         require(
-            _auctionItems[contractAddress_][tokenId_].seller != _msgSender(),
+            items[collectionAddress_][tokenId_].seller != _msgSender(),
             "Seller is not authorized"
         );
         require(
-            _msgSender() !=
-                _auctionItems[contractAddress_][tokenId_].currentBidder,
+            _msgSender() != items[collectionAddress_][tokenId_].currentBidder,
             "Current bidder is not authorized"
         );
         require(
-            _auctionItems[contractAddress_][tokenId_].endsAt > 0 &&
-                block.timestamp <
-                _auctionItems[contractAddress_][tokenId_].endsAt,
+            items[collectionAddress_][tokenId_].endsAt > 0 &&
+                block.timestamp < items[collectionAddress_][tokenId_].endsAt,
             "Timestamp out of range"
         );
 
-        AuctionItem memory auctionItem = _auctionItems[contractAddress_][
-            tokenId_
-        ];
+        Item memory auctionItem = items[collectionAddress_][tokenId_];
 
         uint256 result;
         if (msg.value > 0) {
@@ -148,7 +144,7 @@ contract NFTAuctions is
             result = SalesService.approvePaymentERC20(
                 _msgSender(),
                 address(this),
-                tokenAddress_,
+                erc20Address_,
                 amountIn_,
                 amountIn_,
                 0
@@ -167,25 +163,23 @@ contract NFTAuctions is
             );
         }
 
-        _addAuctionBid(contractAddress_, tokenId_, _msgSender(), result);
+        _addBid(collectionAddress_, tokenId_, _msgSender(), result);
     }
 
-    function finishAuctionSale(address contractAddress_, uint256 tokenId_)
+    function finishAuction(address collectionAddress_, uint256 tokenId_)
         public
         nonReentrant
     {
         require(
-            _auctionItems[contractAddress_][tokenId_].endsAt > 0 &&
-                block.timestamp >
-                _auctionItems[contractAddress_][tokenId_].endsAt,
+            items[collectionAddress_][tokenId_].endsAt > 0 &&
+                block.timestamp > items[collectionAddress_][tokenId_].endsAt,
             "Auction must be finished"
         );
         if (
-            _auctionItems[contractAddress_][tokenId_].seller == _msgSender() ||
-            _auctionItems[contractAddress_][tokenId_].currentBidder ==
-            _msgSender()
+            items[collectionAddress_][tokenId_].seller == _msgSender() ||
+            items[collectionAddress_][tokenId_].currentBidder == _msgSender()
         ) {
-            _finishAuctionSale(contractAddress_, tokenId_);
+            _finishAuction(collectionAddress_, tokenId_);
         } else {
             revert("Only Auction participants allowed");
         }
@@ -193,44 +187,74 @@ contract NFTAuctions is
 
     function itemOfUserByIndex(
         address user_,
-        address contractAddress_,
+        address collectionAddress_,
         uint256 index_
-    ) public view returns (AuctionItem memory) {
+    ) public view  returns (
+            address seller,
+            address currentBidder,
+            uint256 currentBid,
+            uint256 endsAt,
+            address collectionAddress,
+            uint256 tokenId
+        ) {
         require(
-            index_ < _userTokenIds[user_][contractAddress_].length(),
+            index_ < _userTokenIds[user_][collectionAddress_].length(),
             "Index out of bounds"
         );
-        uint256 tokenId = _userTokenIds[user_][contractAddress_].at(index_);
-        return _auctionItems[contractAddress_][tokenId];
+        tokenId = _userTokenIds[user_][collectionAddress_].at(index_);
+        Item memory item = items[collectionAddress_][tokenId];
+        return (
+            item.seller,
+            item.currentBidder,
+            item.currentBid,
+            item.endsAt,
+            collectionAddress,
+            tokenId
+        );
     }
 
-    function getUserItemsCount(address user_, address contractAddress_)
+    function getUserItemsCount(address user_, address collectionAddress_)
         public
         view
         returns (uint256)
     {
-        return _userTokenIds[user_][contractAddress_].length();
+        return _userTokenIds[user_][collectionAddress_].length();
     }
 
-    function itemByIndex(address contractAddress_, uint256 index_)
+    function itemByIndex(address collectionAddress_, uint256 index_)
         public
         view
-        returns (AuctionItem memory)
+        returns (
+            address seller,
+            address currentBidder,
+            uint256 currentBid,
+            uint256 endsAt,
+            address collectionAddress,
+            uint256 tokenId
+        )
     {
         require(
-            index_ < _collectionTokenIds[contractAddress_].length(),
+            index_ < _collectionTokenIds[collectionAddress_].length(),
             "Index out of bounds"
         );
-        uint256 tokenId = _collectionTokenIds[contractAddress_].at(index_);
-        return _auctionItems[contractAddress_][tokenId];
+        tokenId = _collectionTokenIds[collectionAddress_].at(index_);
+        Item memory item = items[collectionAddress_][tokenId];
+        return (
+            item.seller,
+            item.currentBidder,
+            item.currentBid,
+            item.endsAt,
+            collectionAddress,
+            tokenId
+        );
     }
 
-    function getAllItemsCount(address contractAddress_)
+    function getAllItemsCount(address collectionAddress_)
         public
         view
         returns (uint256)
     {
-        return _collectionTokenIds[contractAddress_].length();
+        return _collectionTokenIds[collectionAddress_].length();
     }
 
     function setPanicSwitch(bool status_) public onlyOwner {
@@ -241,16 +265,16 @@ contract NFTAuctions is
         }
     }
 
-    function _addAuctionItem(
+    function _addItem(
         address user_,
-        address contractAddress_,
+        address collectionAddress_,
         uint256 tokenId_,
         uint256 floorPrice_,
         uint256 days_
     ) internal {
-        _userTokenIds[user_][contractAddress_].add(tokenId_);
-        _collectionTokenIds[contractAddress_].add(tokenId_);
-        _auctionItems[contractAddress_][tokenId_] = AuctionItem(
+        _userTokenIds[user_][collectionAddress_].add(tokenId_);
+        _collectionTokenIds[collectionAddress_].add(tokenId_);
+        items[collectionAddress_][tokenId_] = Item(
             user_,
             address(0),
             floorPrice_,
@@ -258,45 +282,44 @@ contract NFTAuctions is
         );
     }
 
-    function _destroyAuctionItem(
+    function _destroyItem(
         address sender_,
-        address contractAddress_,
+        address collectionAddress_,
         uint256 tokenId_
     ) internal {
-        _userTokenIds[sender_][contractAddress_].remove(tokenId_);
-        _collectionTokenIds[contractAddress_].remove(tokenId_);
-        delete _auctionItems[contractAddress_][tokenId_];
+        _userTokenIds[sender_][collectionAddress_].remove(tokenId_);
+        _collectionTokenIds[collectionAddress_].remove(tokenId_);
+        delete items[collectionAddress_][tokenId_];
     }
 
-    function _addAuctionBid(
-        address contractAddress_,
+    function _addBid(
+        address collectionAddress_,
         uint256 tokenId_,
         address bidder_,
         uint256 bid_
     ) internal {
         // saving information to make external call after state change
-        address previousBidder = _auctionItems[contractAddress_][tokenId_]
+        address previousBidder = items[collectionAddress_][tokenId_]
             .currentBidder;
-        uint256 previousBid = _auctionItems[contractAddress_][tokenId_]
-            .currentBid;
+        uint256 previousBid = items[collectionAddress_][tokenId_].currentBid;
 
-        _auctionItems[contractAddress_][tokenId_].currentBid = bid_;
-        _auctionItems[contractAddress_][tokenId_].currentBidder = bidder_;
+        items[collectionAddress_][tokenId_].currentBid = bid_;
+        items[collectionAddress_][tokenId_].currentBidder = bidder_;
         //if remaining days for auction to end are < 1, then reset endsAt to now + 1 day;
-        uint256 remainingSeconds = (_auctionItems[contractAddress_][tokenId_]
-            .endsAt - block.timestamp);
+        uint256 remainingSeconds = (items[collectionAddress_][tokenId_].endsAt -
+            block.timestamp);
         if (remainingSeconds < 86400) {
-            _auctionItems[contractAddress_][tokenId_].endsAt =
+            items[collectionAddress_][tokenId_].endsAt =
                 block.timestamp +
                 1 days;
         }
 
-        emit AuctionBidCreated(
-            _auctionItems[contractAddress_][tokenId_].currentBidder,
-            contractAddress_,
+        emit BidCreated(
+            items[collectionAddress_][tokenId_].currentBidder,
+            collectionAddress_,
             tokenId_,
-            _auctionItems[contractAddress_][tokenId_].currentBid,
-            _auctionItems[contractAddress_][tokenId_].endsAt
+            items[collectionAddress_][tokenId_].currentBid,
+            items[collectionAddress_][tokenId_].endsAt
         );
 
         // if it is not the first bid
@@ -305,12 +328,10 @@ contract NFTAuctions is
         }
     }
 
-    function _finishAuctionSale(address contractAddress_, uint256 tokenId_)
+    function _finishAuction(address collectionAddress_, uint256 tokenId_)
         internal
     {
-        AuctionItem memory auctionItem = _auctionItems[contractAddress_][
-            tokenId_
-        ];
+        Item memory auctionItem = items[collectionAddress_][tokenId_];
         address to;
         bool sold;
 
@@ -321,7 +342,7 @@ contract NFTAuctions is
             SalesService.unlockPendingRevenue(
                 auctionItem.seller,
                 auctionItem.currentBid,
-                CollectionManager.getFee(contractAddress_)
+                CollectionManager.getFee(collectionAddress_)
             );
         } else {
             // is not sold so we return the NFT.
@@ -329,18 +350,22 @@ contract NFTAuctions is
             sold = false;
         }
 
-        emit AuctionItemTransfer(
+        emit ItemTransferred(
             auctionItem.seller,
             to,
-            contractAddress_,
+            collectionAddress_,
             tokenId_,
             auctionItem.currentBid,
             sold
         );
 
-        _destroyAuctionItem(auctionItem.seller, contractAddress_, tokenId_);
+        _destroyItem(auctionItem.seller, collectionAddress_, tokenId_);
 
-        IERC721(contractAddress_).safeTransferFrom(address(this), to, tokenId_);
+        IERC721(collectionAddress_).safeTransferFrom(
+            address(this),
+            to,
+            tokenId_
+        );
     }
 
     function _msgSender()
@@ -363,9 +388,9 @@ contract NFTAuctions is
         return ERC2771Context._msgData();
     }
 
-    function onlyWhitelisted(address contractAddress_) internal view {
+    function onlyWhitelisted(address collectionAddress_) internal view {
         require(
-            CollectionManager.isWhitelistedCollection(contractAddress_),
+            CollectionManager.isWhitelistedCollection(collectionAddress_),
             "Contract is not whitelisted"
         );
     }

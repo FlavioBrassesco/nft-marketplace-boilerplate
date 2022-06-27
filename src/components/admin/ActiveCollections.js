@@ -23,12 +23,9 @@ import { FiPlus, FiPercent, FiCheck, FiX, FiEdit } from "react-icons/fi";
 import { FaEthereum } from "react-icons/fa";
 import SaveButton from "../SaveButton";
 import UpdateDeleteButton from "../UpdateDeleteButton";
-import { Collections as CollectionsCtx } from "@contexts/Collections";
-import Web3Context from "@contexts/Web3Provider";
-import usePagedTable from "@helpers/usePagedTable";
-
-import { ethers } from "ethers";
-const { abi } = require("@services/blockchain/abi/NFTCollectionManager.json");
+import { Collections as CollectionsCtx } from "contexts/Collections";
+import Web3Context from "contexts/Web3Provider";
+import usePagedTable from "helpers/usePagedTable";
 
 const modalStyle = {
   position: "absolute",
@@ -96,7 +93,10 @@ const ActiveCollections = () => {
   const handleClick = async () => {
     return (
       web3Provider &&
-      (await addWhitelistedCollection(web3Provider, addField.current.value))
+      (await addWhitelistedCollection(
+        web3Provider.getSigner(),
+        addField.current.value
+      ))
     );
   };
 

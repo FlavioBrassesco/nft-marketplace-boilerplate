@@ -1,5 +1,5 @@
-import connectDB from "@middleware/connectDB";
-import SiteOptions from "@services/database/models/SiteOptions";
+import connectDB from "middleware/connectDB";
+import SiteOptions from "services/models/SiteOptions";
 
 const handler = async function (req, res) {
   if (req.method === "GET") {

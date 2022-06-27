@@ -8,7 +8,7 @@ import {
   Box,
   Button,
 } from "@mui/material";
-import ActivityLog from "@components/ActivityLog";
+import ActivityLog from "components/ActivityLog";
 
 import { history } from "./data";
 

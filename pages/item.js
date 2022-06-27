@@ -1,9 +1,9 @@
-import ItemBanner from "@components/ItemBanner";
-import ItemProperties from "@components/ItemProperties";
-import ItemDetails from "@components/ItemDetails";
-import ItemHistory from "@components/ItemHistory";
-import ItemManage from "@components/ItemManage";
-import ItemCard from "@components/ItemCard";
+import ItemBanner from "components/ItemBanner";
+import ItemProperties from "components/ItemProperties";
+import ItemDetails from "components/ItemDetails";
+import ItemHistory from "components/ItemHistory";
+import ItemManage from "components/ItemManage";
+import ItemCard from "components/ItemCard";
 import { Container, Grid, Typography } from "@mui/material";
 
 import { data, history, properties, details } from "./data";

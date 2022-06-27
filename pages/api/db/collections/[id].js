@@ -1,7 +1,7 @@
-import connectDB from "@middleware/connectDB";
-import connectEthers from "@middleware/connectEthers"
-import Collection from "@services/database/models/Collection";
-const { abi } = require("@services/blockchain/abi/erc721.json");
+import connectDB from "middleware/connectDB";
+import connectEthers from "middleware/connectEthers"
+import Collection from "services/models/Collection";
+const { abi } = require("services/abi/MockERC721.json");
 
 const handler = async function (req, res) {
   const { id } = req.query;

@@ -1,12 +1,7 @@
-const { data } = require("./mockupMarketplaceData");
 const { ethers } = require("hardhat");
 const helpers = require("../test/helpers");
-require("dotenv").config();
-const fs = require("fs");
+const { data } = require("./mockupMarketplaceData");
 
-const ADDR_0 = "0x0000000000000000000000000000000000000000";
-
-// Bootstraping deployment for testing services
 async function main() {
   const signers = await ethers.getSigners();
   const signersMap = [
@@ -155,7 +150,7 @@ async function main() {
 
             const txSale = await nftmarketplace
               .connect(signer)
-              .createMarketItem(nftminter.address, i.id, i.price);
+              .createItem(nftminter.address, i.id, i.price);
             txSale.wait();
             console.log(
               `Market item created: Collection: ${i.collection} ID: ${i.id} Price: ${i.price}`
@@ -176,7 +171,7 @@ async function main() {
 
             const txSale = await nftauctions
               .connect(signer)
-              .createAuctionItem(nftminter.address, i.id, i.price, i.endsAt);
+              .createItem(nftminter.address, i.id, i.price, i.endsAt);
             txSale.wait();
             console.log(
               `Auction created: Collection: ${i.collection} ID: ${i.id} Floor Price: ${i.price} Ends At: ${i.endsAt}days`
@@ -197,9 +192,15 @@ async function main() {
 
             const txSale = await nftbuyoffers
               .connect(signer)
-              .createBuyOffer(nftminter.address, i.id, ADDR_0, i.offer, {
-                value: i.offer,
-              });
+              .createOffer(
+                nftminter.address,
+                i.id,
+                ethers.constants.AddressZero,
+                i.offer,
+                {
+                  value: i.offer,
+                }
+              );
             txSale.wait();
             console.log(
               `Buy Offer created: Collection: ${i.collection} ID: ${i.id} Offer: ${i.offer}`
@@ -220,9 +221,15 @@ async function main() {
 
             const txSale = await nftauctions
               .connect(signer)
-              .bid(nftminter.address, i.id, ADDR_0, i.bid, {
-                value: i.bid,
-              });
+              .bid(
+                nftminter.address,
+                i.id,
+                ethers.constants.AddressZero,
+                i.bid,
+                {
+                  value: i.bid,
+                }
+              );
             txSale.wait();
             console.log(
               `Bid created: Collection: ${i.collection} ID: ${i.id} Bid: ${i.bid}`

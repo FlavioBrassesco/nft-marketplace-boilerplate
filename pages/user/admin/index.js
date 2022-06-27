@@ -1,11 +1,11 @@
 import { useState } from "react";
 import { Container, Grid, Tabs, Tab, Box } from "@mui/material";
 
-import SiteOptions from "@components/admin/SiteOptions";
-import TabPanel from "@components/TabPanel";
-import ActiveCollections from "@components/admin/ActiveCollections";
-import SalesOptions from "@components/admin/SalesOptions";
-import CoreOptions from "@components/admin/core/CoreOptions";
+// import SiteOptions from "components/admin/SiteOptions";
+import TabPanel from "components/TabPanel";
+// import ActiveCollections from "components/admin/ActiveCollections";
+// import SalesOptions from "components/admin/SalesOptions";
+import CoreOptions from "components/admin/core/CoreOptions";
 
 const Admin = () => {
   const [tab, setTab] = useState(0);
@@ -35,15 +35,15 @@ const Admin = () => {
       </Grid>
 
       <TabPanel value={tab} index={0}>
-        <SiteOptions />
+        {/*<SiteOptions />*/}
       </TabPanel>
 
       <TabPanel value={tab} index={1}>
-        <ActiveCollections />
+        {/*<ActiveCollections />*/}
       </TabPanel>
 
       <TabPanel value={tab} index={2}>
-        <SalesOptions />
+        {/*<SalesOptions />*/}
       </TabPanel>
 
       <TabPanel value={tab} index={3}>

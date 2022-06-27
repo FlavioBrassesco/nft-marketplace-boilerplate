@@ -26,6 +26,8 @@ contract SalesService is ISalesService, Ownable, ReentrancyGuard {
     mapping(address => uint256) internal _pendingRevenue;
     address payable internal _treasuryAddress;
 
+    event FundsTransferred(address indexed user, uint256 funds);
+
     constructor(
         address payable treasuryAddress_,
         address weth_,
@@ -170,7 +172,7 @@ contract SalesService is ISalesService, Ownable, ReentrancyGuard {
         require(_pendingRevenue[_msgSender()] > 0, "No pending revenue");
         uint256 pendingRevenue = _pendingRevenue[_msgSender()];
         delete _pendingRevenue[_msgSender()];
-
+        emit FundsTransferred(payable(_msgSender()), pendingRevenue);
         Address.sendValue(payable(_msgSender()), pendingRevenue);
     }
 

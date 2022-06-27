@@ -23,12 +23,12 @@ contract NFTMarketplace is
 {
     using EnumerableSet for EnumerableSet.UintSet;
 
-    mapping(address => mapping(uint256 => MarketItem)) internal _marketItems;
+    mapping(address => mapping(uint256 => Item)) public items;
     mapping(address => mapping(address => EnumerableSet.UintSet))
         internal _userTokenIds;
     mapping(address => EnumerableSet.UintSet) internal _collectionTokenIds;
 
-    struct MarketItem {
+    struct Item {
         address seller;
         uint256 price;
     }
@@ -37,24 +37,24 @@ contract NFTMarketplace is
     INFTCollectionManager internal CollectionManager;
     ISalesService internal SalesService;
 
-    event MarketItemCreated(
+    event ItemCreated(
         address indexed seller,
-        address indexed contractAddress,
+        address indexed collectionAddress,
         uint256 indexed tokenId,
         uint256 price
     );
 
-    event MarketItemUpdated(
+    event ItemUpdated(
         address indexed seller,
-        address indexed contractAddress,
+        address indexed collectionAddress,
         uint256 indexed tokenId,
         uint256 price
     );
 
-    event MarketItemTransferred(
+    event ItemTransferred(
         address indexed seller,
         address owner,
-        address indexed contractAddress,
+        address indexed collectionAddress,
         uint256 indexed tokenId,
         uint256 price
     );
@@ -68,63 +68,53 @@ contract NFTMarketplace is
         SalesService = ISalesService(salesService_);
     }
 
-    function createMarketItem(
-        address contractAddress_,
+    function createItem(
+        address collectionAddress_,
         uint256 tokenId_,
         uint256 price_
     ) public nonReentrant whenNotPaused {
-        onlyWhitelisted(contractAddress_);
+        onlyWhitelisted(collectionAddress_);
         require(price_ > 0, "Price must be at least 1 wei");
 
-        _addMarketItem(_msgSender(), contractAddress_, tokenId_, price_);
+        _addItem(_msgSender(), collectionAddress_, tokenId_, price_);
 
-        emit MarketItemCreated(
-            _msgSender(),
-            contractAddress_,
-            tokenId_,
-            price_
-        );
+        emit ItemCreated(_msgSender(), collectionAddress_, tokenId_, price_);
         //NFT transfer from msg sender to this contract
-        IERC721(contractAddress_).safeTransferFrom(
+        IERC721(collectionAddress_).safeTransferFrom(
             _msgSender(),
             address(this),
             tokenId_
         );
     }
 
-    function updateMarketItem(
-        address contractAddress_,
+    function updateItem(
+        address collectionAddress_,
         uint256 tokenId_,
         uint256 price_
     ) public {
-        onlySeller(contractAddress_, tokenId_);
+        onlySeller(collectionAddress_, tokenId_);
         require(price_ > 0, "Price must be at least 1 wei");
-        _marketItems[contractAddress_][tokenId_].price = price_;
+        items[collectionAddress_][tokenId_].price = price_;
 
-        emit MarketItemUpdated(
-            _msgSender(),
-            contractAddress_,
-            tokenId_,
-            price_
-        );
+        emit ItemUpdated(_msgSender(), collectionAddress_, tokenId_, price_);
     }
 
     /// @notice Cancels a listed item and returns NFT to seller.
-    function cancelMarketItem(address contractAddress_, uint256 tokenId_)
+    function cancelItem(address collectionAddress_, uint256 tokenId_)
         public
         nonReentrant
     {
-        onlySeller(contractAddress_, tokenId_);
-        emit MarketItemTransferred(
+        onlySeller(collectionAddress_, tokenId_);
+        emit ItemTransferred(
             _msgSender(),
             _msgSender(),
-            contractAddress_,
+            collectionAddress_,
             tokenId_,
-            _marketItems[contractAddress_][tokenId_].price
+            items[collectionAddress_][tokenId_].price
         );
-        _destroyMarketItem(_msgSender(), contractAddress_, tokenId_);
+        _destroyItem(_msgSender(), collectionAddress_, tokenId_);
 
-        IERC721(contractAddress_).safeTransferFrom(
+        IERC721(collectionAddress_).safeTransferFrom(
             address(this),
             _msgSender(),
             tokenId_
@@ -132,13 +122,13 @@ contract NFTMarketplace is
     }
 
     function buy(
-        address contractAddress_,
+        address collectionAddress_,
         uint256 tokenId_,
-        address tokenAddress_,
+        address erc20Address_,
         uint256 amountIn_
     ) public payable nonReentrant whenNotPaused {
         bool marketOwner = false;
-        address seller = _marketItems[contractAddress_][tokenId_].seller;
+        address seller = items[collectionAddress_][tokenId_].seller;
         uint256 price;
         uint256 feePercentage;
 
@@ -149,18 +139,18 @@ contract NFTMarketplace is
         // instead of doing a pay-to-mint sale
         if (seller == address(0)) {
             seller = owner();
-            price = CollectionManager.getFloorPrice(contractAddress_);
+            price = CollectionManager.getFloorPrice(collectionAddress_);
             feePercentage = 0;
             marketOwner = true;
         } else {
-            price = _marketItems[contractAddress_][tokenId_].price;
-            feePercentage = CollectionManager.getFee(contractAddress_);
+            price = items[collectionAddress_][tokenId_].price;
+            feePercentage = CollectionManager.getFee(collectionAddress_);
         }
 
-        emit MarketItemTransferred(
+        emit ItemTransferred(
             seller,
             _msgSender(),
-            contractAddress_,
+            collectionAddress_,
             tokenId_,
             price
         );
@@ -175,55 +165,81 @@ contract NFTMarketplace is
             SalesService.approvePaymentERC20(
                 _msgSender(),
                 seller,
-                tokenAddress_,
+                erc20Address_,
                 amountIn_,
                 price,
                 feePercentage
             );
         }
-        _sellItem(_msgSender(), contractAddress_, tokenId_, marketOwner);
+        _sellItem(_msgSender(), collectionAddress_, tokenId_, marketOwner);
     }
 
     function itemOfUserByIndex(
         address user_,
-        address contractAddress_,
+        address collectionAddress_,
         uint256 index_
-    ) public view returns (MarketItem memory) {
+    )
+        public
+        view
+        returns (
+            address seller,
+            uint256 price,
+            address collectionAddress,
+            uint256 tokenId
+        )
+    {
         require(
-            index_ < _userTokenIds[user_][contractAddress_].length(),
+            index_ < _userTokenIds[user_][collectionAddress_].length(),
             "Index out of bounds"
         );
-        uint256 tokenId = _userTokenIds[user_][contractAddress_].at(index_);
-        return _marketItems[contractAddress_][tokenId];
+        tokenId = _userTokenIds[user_][collectionAddress_].at(index_);
+        Item memory marketItem = items[collectionAddress_][tokenId];
+        return (
+            marketItem.seller,
+            marketItem.price,
+            collectionAddress_,
+            tokenId
+        );
     }
 
-    function getUserItemsCount(address user_, address contractAddress_)
+    function getUserItemsCount(address user_, address collectionAddress_)
         public
         view
         returns (uint256)
     {
-        return _userTokenIds[user_][contractAddress_].length();
+        return _userTokenIds[user_][collectionAddress_].length();
     }
 
-    function itemByIndex(address contractAddress_, uint256 index_)
+    function itemByIndex(address collectionAddress_, uint256 index_)
         public
         view
-        returns (MarketItem memory)
+        returns (
+            address seller,
+            uint256 price,
+            address collectionAddress,
+            uint256 tokenId
+        )
     {
         require(
-            index_ < _collectionTokenIds[contractAddress_].length(),
+            index_ < _collectionTokenIds[collectionAddress_].length(),
             "Index out of bounds"
         );
-        uint256 tokenId = _collectionTokenIds[contractAddress_].at(index_);
-        return _marketItems[contractAddress_][tokenId];
+        tokenId = _collectionTokenIds[collectionAddress_].at(index_);
+        Item memory marketItem = items[collectionAddress_][tokenId];
+        return (
+            marketItem.seller,
+            marketItem.price,
+            collectionAddress_,
+            tokenId
+        );
     }
 
-    function getAllItemsCount(address contractAddress_)
+    function getAllItemsCount(address collectionAddress_)
         public
         view
         returns (uint256)
     {
-        return _collectionTokenIds[contractAddress_].length();
+        return _collectionTokenIds[collectionAddress_].length();
     }
 
     function setPanicSwitch(bool status_) public onlyOwner {
@@ -234,30 +250,30 @@ contract NFTMarketplace is
         }
     }
 
-    function _addMarketItem(
+    function _addItem(
         address sender_,
-        address contractAddress_,
+        address collectionAddress_,
         uint256 tokenId_,
         uint256 price_
     ) internal {
-        _userTokenIds[sender_][contractAddress_].add(tokenId_);
-        _collectionTokenIds[contractAddress_].add(tokenId_);
-        _marketItems[contractAddress_][tokenId_] = MarketItem(sender_, price_);
+        _userTokenIds[sender_][collectionAddress_].add(tokenId_);
+        _collectionTokenIds[collectionAddress_].add(tokenId_);
+        items[collectionAddress_][tokenId_] = Item(sender_, price_);
     }
 
-    function _destroyMarketItem(
+    function _destroyItem(
         address sender_,
-        address contractAddress_,
+        address collectionAddress_,
         uint256 tokenId_
     ) internal {
-        _userTokenIds[sender_][contractAddress_].remove(tokenId_);
-        _collectionTokenIds[contractAddress_].remove(tokenId_);
-        delete _marketItems[contractAddress_][tokenId_];
+        _userTokenIds[sender_][collectionAddress_].remove(tokenId_);
+        _collectionTokenIds[collectionAddress_].remove(tokenId_);
+        delete items[collectionAddress_][tokenId_];
     }
 
     function _sellItem(
         address to_,
-        address contractAddress_,
+        address collectionAddress_,
         uint256 tokenId_,
         bool isMarketOwner
     ) internal {
@@ -266,15 +282,15 @@ contract NFTMarketplace is
         if (isMarketOwner) {
             from = owner();
         } else {
-            _destroyMarketItem(
-                _marketItems[contractAddress_][tokenId_].seller,
-                contractAddress_,
+            _destroyItem(
+                items[collectionAddress_][tokenId_].seller,
+                collectionAddress_,
                 tokenId_
             );
         }
 
         // NFT transfer
-        IERC721(contractAddress_).safeTransferFrom(from, to_, tokenId_);
+        IERC721(collectionAddress_).safeTransferFrom(from, to_, tokenId_);
     }
 
     function _msgSender()
@@ -297,19 +313,19 @@ contract NFTMarketplace is
         return ERC2771Context._msgData();
     }
 
-    function onlySeller(address contractAddress_, uint256 tokenId_)
+    function onlySeller(address collectionAddress_, uint256 tokenId_)
         internal
         view
     {
         require(
-            _msgSender() == _marketItems[contractAddress_][tokenId_].seller,
+            _msgSender() == items[collectionAddress_][tokenId_].seller,
             "Only seller allowed"
         );
     }
 
-    function onlyWhitelisted(address contractAddress_) internal view {
+    function onlyWhitelisted(address collectionAddress_) internal view {
         require(
-            CollectionManager.isWhitelistedCollection(contractAddress_),
+            CollectionManager.isWhitelistedCollection(collectionAddress_),
             "Contract is not whitelisted"
         );
     }

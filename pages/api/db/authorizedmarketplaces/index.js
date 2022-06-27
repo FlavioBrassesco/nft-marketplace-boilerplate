@@ -1,5 +1,5 @@
-import connectDB from "@middleware/connectDB";
-import AuthorizedMarketplace from "@services/database/models/AuthorizedMarketplace";
+import connectDB from "middleware/connectDB";
+import AuthorizedMarketplace from "services/models/AuthorizedMarketplace";
 
 const handler = async function (req, res) {
   if (req.method === "GET") {

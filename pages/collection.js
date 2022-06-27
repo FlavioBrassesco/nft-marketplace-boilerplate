@@ -13,13 +13,13 @@ import {
   Tabs,
   Tab,
 } from "@mui/material";
-import CollectionBanner from "@components/CollectionBanner";
-import ItemCard from "@components/ItemCard";
-import TabPanel from "@components/TabPanel";
-import { StatusSelectToggle } from "@components/StatusSelect";
-import TraitChips from "@components/TraitChips";
-import TraitAccordions from "@components/TraitAccordions";
-import ActivityLog from "@components/ActivityLog";
+import CollectionBanner from "components/CollectionBanner";
+import ItemCard from "components/ItemCard";
+import TabPanel from "components/TabPanel";
+import { StatusSelectToggle } from "components/StatusSelect";
+import TraitChips from "components/TraitChips";
+import TraitAccordions from "components/TraitAccordions";
+import ActivityLog from "components/ActivityLog";
 
 import { data, traits, history } from "./data";
 

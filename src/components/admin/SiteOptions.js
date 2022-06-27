@@ -1,6 +1,6 @@
 import { useContext, useEffect, useState } from "react";
 import Image from "next/image";
-import { SiteOptions as SiteOptionsContext } from "@contexts/SiteOptions";
+import { SiteOptions as SiteOptionsContext } from "contexts/SiteOptions";
 import { styled } from "@mui/material/styles";
 import {
   Grid,

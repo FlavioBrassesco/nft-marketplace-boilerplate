@@ -1,7 +1,7 @@
 import { useState, useRef, useEffect } from "react";
 import { IconButton, Button, SvgIcon } from "@mui/material";
 import { FiCheck, FiAlertTriangle, FiLoader, FiSave } from "react-icons/fi";
-import styles from "@styles/SaveButton.module.css";
+import styles from "styles/SaveButton.module.css";
 
 const SaveButton = ({
   click = async (f) => f,
